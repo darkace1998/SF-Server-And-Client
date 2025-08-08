@@ -8,6 +8,8 @@ This project provides:
 
 ## 🚀 Quick Start
 
+**New to SF-Server?** Check out our [Quick Setup Guide](QUICKSTART.md) for the fastest way to get started!
+
 ### Server Setup
 
 1. **Prerequisites**
@@ -166,6 +168,13 @@ SF-Server-And-Client/
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 📋 Documentation
+
+- [Quick Setup Guide](QUICKSTART.md) - Get started in minutes
+- [Client Setup Guide](CLIENT_SETUP.md) - Detailed client configuration
+- [Changelog](CHANGELOG.md) - Version history and improvements
+- [Docker Guide](docker-compose.yml) - Container deployment
 
 ## 🙏 Acknowledgments
 
