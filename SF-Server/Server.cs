@@ -17,6 +17,7 @@ public class Server
     
     private readonly NetServer _masterServer;
     private readonly ClientManager _clientMgr;
+    private readonly ServerConfig _config;
     private readonly string _webApitoken;
     private readonly SteamId _hostSteamId;
     private readonly HttpClient _httpClient;
@@ -26,32 +27,44 @@ public class Server
     //private readonly List<IPAddress> _approvedIPs;
     private const string LidgrenIdentifier = "monky.SF_Lidgren";
     private const string StickFightAppId = "674940"; 
-    private const int MaxPlayerCount = 4; // Hardcoded to 4 for now to remain compatible with base game
 
     private int NumberOfClients => _masterServer.Connections.Count;
 
-    public Server(int port, string steamWebApiToken, SteamId hostSteamId)
+    public Server(ServerConfig config)
     {
-        var config = new NetPeerConfiguration(LidgrenIdentifier)
+        _config = config;
+        
+        var netConfig = new NetPeerConfiguration(LidgrenIdentifier)
         {
-            Port = port,
-            MaximumConnections = MaxPlayerCount
+            Port = config.Port,
+            MaximumConnections = config.MaxPlayers
         };
 
-        config.EnableMessageType(NetIncomingMessageType.DiscoveryRequest);
-        config.EnableMessageType(NetIncomingMessageType.ConnectionApproval);
+        netConfig.EnableMessageType(NetIncomingMessageType.DiscoveryRequest);
+        netConfig.EnableMessageType(NetIncomingMessageType.ConnectionApproval);
         
-        var server = new NetServer(config);
-        ServerLogPath = Path.Combine(Environment.CurrentDirectory, "debug_log.txt");
+        var server = new NetServer(netConfig);
+        ServerLogPath = Path.Combine(Environment.CurrentDirectory, config.LogPath);
         _masterServer = server;
-        _webApitoken = steamWebApiToken;
-        _hostSteamId = hostSteamId;
+        _webApitoken = config.SteamWebApiToken;
+        _hostSteamId = new SteamId(config.HostSteamId);
         _rand = new Random();
         _httpClient = new HttpClient(); // Perhaps configure SocketsHttpHandler.PooledConnectionLifetime ?
         _packetWorker = new PacketWorker(this);
         _jsonOptions = new JsonSerializerOptions {PropertyNameCaseInsensitive = true};
-        _clientMgr = new ClientManager(MaxPlayerCount);
+        _clientMgr = new ClientManager(config.MaxPlayers);
         //_approvedIPs = new List<IPAddress>();
+    }
+
+    // Legacy constructor for backward compatibility
+    public Server(int port, string steamWebApiToken, SteamId hostSteamId)
+        : this(new ServerConfig 
+        { 
+            Port = port, 
+            SteamWebApiToken = steamWebApiToken, 
+            HostSteamId = hostSteamId.id 
+        })
+    {
     }
 
     public bool Start()
@@ -135,7 +148,7 @@ public class Server
 
     private void OnPlayerRequestingConnection(NetIncomingMessage msg)
     {
-        if (NumberOfClients == MaxPlayerCount)
+        if (NumberOfClients == _config.MaxPlayers)
         {
             Console.WriteLine("Server is full, refusing connection...");
             msg.SenderConnection.Deny("Server is full, try again later.");
@@ -230,7 +243,7 @@ public class Server
                             $"?key={_webApitoken}&appid={StickFightAppId}&ticket={authTicket}&steamid={_hostSteamId}";
         Console.WriteLine("auth ticket uri: " + authTicketUri);
 
-        await Task.Delay(1000); // Delay request by 1 second to reduce false positives of a ticket being invalid
+        await Task.Delay(_config.AuthDelayMs); // Delay request to reduce false positives of a ticket being invalid
         var jsonResponse = await _httpClient.GetStringAsync(authTicketUri);
         Console.WriteLine("Steam auth json response: " + jsonResponse);
         

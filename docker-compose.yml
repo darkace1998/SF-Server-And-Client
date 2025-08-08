@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  sf-server:
+    build: .
+    container_name: stickfight-server
+    restart: unless-stopped
+    
+    # Network configuration
+    ports:
+      - "1337:1337/udp"  # Stick Fight server port
+    
+    # Environment variables
+    environment:
+      - SF_PORT=1337
+      - SF_MAX_PLAYERS=4
+      - SF_ENABLE_LOGGING=true
+      # Required: Set these in a .env file
+      - SF_STEAM_WEB_API_TOKEN=${SF_STEAM_WEB_API_TOKEN}
+      - SF_HOST_STEAMID=${SF_HOST_STEAMID}
+    
+    # Volume mounts
+    volumes:
+      - ./server_logs:/app/logs
+      - ./server_config.json:/app/server_config.json:ro  # Optional config file
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "netstat", "-an", "|", "grep", "1337"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

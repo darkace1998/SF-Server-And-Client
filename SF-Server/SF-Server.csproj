@@ -2,12 +2,18 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net7.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
         <RootNamespace>SF_Server</RootNamespace>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>disable</Nullable>
     </PropertyGroup>
 
+    <ItemGroup>
+      <PackageReference Include="Lidgren.Network" Version="1.0.2" />
+    </ItemGroup>
+
+    <!-- Commented out local DLL references that may not be available -->
+    <!--
     <ItemGroup>
       <Reference Include="Lidgren.Network">
         <HintPath>Lidgren.Network.dll</HintPath>
@@ -22,5 +28,6 @@
       <None Remove="Lidgren.Network.dll" />
       <None Remove="UnityEngine.dll" />
     </ItemGroup>
+    -->
 
 </Project>
