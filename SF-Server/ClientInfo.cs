@@ -8,7 +8,7 @@ public class ClientInfo : IEquatable<ClientInfo>
     public SteamId SteamID { get; }
     public string Username { get; }
     //public NetConnection Peer { get; }
-    public IPAddress Address { get; }
+    public IPAddress Address { get; set; }
     public NetConnectionStatus Status { get; set; }
     public int PlayerIndex { get; }
     public int Ping { get; set; }

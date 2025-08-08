@@ -17,6 +17,7 @@ public class Server
     
     private readonly NetServer _masterServer;
     private readonly ClientManager _clientMgr;
+    private readonly MapManager _mapMgr;
     private readonly ServerConfig _config;
     private readonly string _webApitoken;
     private readonly SteamId _hostSteamId;
@@ -53,6 +54,7 @@ public class Server
         _packetWorker = new PacketWorker(this);
         _jsonOptions = new JsonSerializerOptions {PropertyNameCaseInsensitive = true};
         _clientMgr = new ClientManager(config.MaxPlayers);
+        _mapMgr = new MapManager(config);
         //_approvedIPs = new List<IPAddress>();
     }
 
@@ -148,6 +150,20 @@ public class Server
 
     private void OnPlayerRequestingConnection(NetIncomingMessage msg)
     {
+        var address = msg.GetSenderIP();
+        
+        // Check connection cooldown
+        if (!_clientMgr.IsConnectionAllowed(address))
+        {
+            Console.WriteLine($"Connection from {address} denied due to cooldown");
+            msg.SenderConnection.Deny("Too many connection attempts. Please wait before trying again.");
+            _masterServer.Recycle(msg);
+            return;
+        }
+        
+        // Record this connection attempt
+        _clientMgr.RecordConnectionAttempt(address);
+        
         if (NumberOfClients == _config.MaxPlayers)
         {
             Console.WriteLine("Server is full, refusing connection...");
@@ -156,19 +172,17 @@ public class Server
             return;
         }    
             
-        Console.WriteLine("Attempting to auth user...");
-        var address = msg.GetSenderIP();
+        Console.WriteLine($"Attempting to authenticate user from {address}...");
         var client = _clientMgr.GetClient(address);
         
         if (client is not null)
         {
-            Console.WriteLine("Client detected as re-connecting, removing it from client list...");
-            _clientMgr.RemoveClient(client);
+            Console.WriteLine($"Client detected as re-connecting: {client.Username} (Steam ID: {client.SteamID})");
+            // Don't remove the client here, let the authentication process handle duplicates
         }
 
-        Console.WriteLine("User has not been authed, server should have received ticket to continue auth process...");
+        Console.WriteLine("Starting authentication process...");
         Task.Run(() => AuthenticateUser(msg)); // Client should always auth when joining even if they've joined before
-        
     }
 
     private void OnClientStatusChanged(NetIncomingMessage msg)
@@ -270,10 +284,15 @@ public class Server
 
         var playerUsername = await FetchSteamUserName(playerSteamID);
         
-        _clientMgr.AddNewClient(playerSteamID,
+        var clientAdded = _clientMgr.AddNewClient(playerSteamID,
             playerUsername,
             authTicket,
             msg.GetSenderIP());
+        
+        if (!clientAdded)
+        {
+            Console.WriteLine("Client was not added (may be duplicate connection), but authentication succeeded");
+        }
         
         return true;
     }
@@ -299,16 +318,23 @@ public class Server
     // Methods to be executed involving packets sent to and from game
     // *************************************************
     
-    // TODO: Figure out more efficient way to send these so up to 3 msg objects aren't being created for certain packets 
+    // Get current time in milliseconds for packet timing
+    private uint GetCurrentTime() => (uint)(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() & 0xFFFFFFFF);
+    
     public void SendPacketToUser(NetConnection user, byte[] data, SfPacketType messageType,
         NetDeliveryMethod sendMethod = NetDeliveryMethod.ReliableOrdered, int channel = 0)
     {
         var msg = _masterServer.CreateMessage(5 + data.Length); // 5 extra bytes for uint timeSent and byte msgType
-        msg.Write(uint.MaxValue); // TODO: Figure out valid time later
+        msg.Write(GetCurrentTime()); // Current time instead of uint.MaxValue
         msg.Write((byte)messageType); // Packet type
         msg.Write(data);  // packet data
         
-        _masterServer.SendMessage(msg, user, NetDeliveryMethod.ReliableOrdered, channel);
+        _masterServer.SendMessage(msg, user, sendMethod, channel);
+        
+        if (_config.EnableLogging)
+        {
+            Console.WriteLine($"Sent packet to {user.RemoteEndPoint}: Type={messageType}, Size={data.Length}, Method={sendMethod}");
+        }
     }
     
     public void SendPacketToAllUsers(byte[] data, SfPacketType messageType,
@@ -316,15 +342,17 @@ public class Server
         int channel = 0)
     {
         var msg = _masterServer.CreateMessage(5 + data.Length); // 5 extra bytes for uint timeSent and byte msgType
-        msg.Write(uint.MaxValue); // TODO: Figure out valid time later
+        msg.Write(GetCurrentTime()); // Current time instead of uint.MaxValue
         msg.Write((byte)messageType); // Packet type
         msg.Write(data);  // packet data
-
-        // foreach (var b in msg.Data) 
-        //     Console.WriteLine(b);
-        // Console.WriteLine();
         
         _masterServer.SendToAll(msg, ignoredUser, sendMethod, channel);
+        
+        if (_config.EnableLogging)
+        {
+            var connectionCount = _masterServer.Connections.Count - (ignoredUser != null ? 1 : 0);
+            Console.WriteLine($"Broadcast packet to {connectionCount} clients: Type={messageType}, Size={data.Length}, Method={sendMethod}");
+        }
     }
     
     public void OnPlayerRequestingIndex(NetConnection user)
@@ -341,9 +369,15 @@ public class Server
         
         tempMsg.Write((byte)1); // Client accepted as long as this is '1'
         tempMsg.Write((byte)playerInfo.PlayerIndex);
-        tempMsg.Write((byte)0); // Landfall map type
-        tempMsg.Write(4); // Int representing number of bytes map has, 4 for single int '0' that signals vanilla
-        tempMsg.Write(0); // Map data of int '0' signals lobby map
+        
+        // Use MapManager for current map info
+        var currentMap = _mapMgr.CurrentMapType == MapType.Lobby ? 
+            _mapMgr.GetLobbyMap() : 
+            new MapData { MapType = _mapMgr.CurrentMapType, MapId = _mapMgr.CurrentMapId };
+            
+        tempMsg.Write((byte)currentMap.MapType); // Map type
+        tempMsg.Write(4); // Int representing number of bytes map has, 4 for single int
+        tempMsg.Write(currentMap.MapId); // Map data
         
         foreach (var client in _clientMgr.Clients) // Should only be non-null clients
         {
@@ -376,10 +410,11 @@ public class Server
     public void OnPlayerRequestingToSpawn(NetConnection user, NetIncomingMessage spawnPosData)
     {
         var tempMsg = _masterServer.CreateMessage();
-        //Console.WriteLine("spawnPosData Length: " + spawnPosData.Length);
         tempMsg.Write(spawnPosData.ReadBytes(25)); // Contains player index, spawn pos. vector, and rotation vector
-        // TODO: Switch out false with current map type
-        tempMsg.Write(false && NumberOfClients > 1); // Changes spawn pos if not on lobby map and more than 1 player
+        
+        // Use MapManager to determine spawn position modification
+        var shouldModifySpawn = _mapMgr.CurrentMapType != MapType.Lobby && NumberOfClients > 1;
+        tempMsg.Write(shouldModifySpawn); // Changes spawn pos if not on lobby map and more than 1 player
 
         SendPacketToAllUsers(tempMsg.ReadBytes(26), SfPacketType.ClientSpawned); 
     }
@@ -510,13 +545,27 @@ public class Server
 
     public void OnMapChanged(NetConnection user, NetIncomingMessage mapMsgData)
     {
+        var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
+        var mapData = mapMsgData.PeekBytes(mapMsgData.Data.Length - 5);
+        
+        if (!_mapMgr.ValidateMapChange(client?.PlayerIndex ?? -1, mapData))
+        {
+            Console.WriteLine($"Invalid map change request from {client?.Username ?? "unknown"}");
+            return;
+        }
+        
+        Console.WriteLine($"Map change requested by {client?.Username ?? "unknown"}");
+        _mapMgr.ProcessMapChange(mapData);
+        
         SendPacketToAllUsers(
-            mapMsgData.PeekBytes(mapMsgData.Data.Length - 5),
+            mapData,
             SfPacketType.MapChange,
             null,
             NetDeliveryMethod.ReliableOrdered,
             mapMsgData.SequenceChannel
         );
+        
+        Console.WriteLine($"Map changed to ID: {_mapMgr.CurrentMapId}, Type: {_mapMgr.CurrentMapType}");
     }
 
     public void OnPlayerTalked(NetConnection user, NetIncomingMessage chatMsgData)
