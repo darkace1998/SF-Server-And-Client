@@ -1,4 +1,4 @@
-﻿using SF_Server;
+using SF_Server;
 
 const string defaultConfigPath = "server_config.json";
 
@@ -66,6 +66,7 @@ ShutdownHandler.RegisterShutdownAction(() =>
 {
     Console.WriteLine("Shutting down server...");
     server.Close();
+    server.Dispose(); // Security: Proper resource disposal
 });
 
 Console.WriteLine("Server started successfully! Press Ctrl+C to shutdown gracefully.");
@@ -85,7 +86,7 @@ while (!ShutdownHandler.ShutdownRequested)
         {
             Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
         }
-        
+
         // Log stack trace for debugging
         if (config.EnableLogging)
         {

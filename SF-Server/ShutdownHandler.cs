@@ -7,9 +7,9 @@ public static class ShutdownHandler
 {
     private static volatile bool _shutdownRequested = false;
     private static readonly List<Action> _shutdownActions = new();
-    
+
     public static bool ShutdownRequested => _shutdownRequested;
-    
+
     /// <summary>
     /// Initialize the shutdown handler
     /// </summary>
@@ -21,24 +21,24 @@ public static class ShutdownHandler
             Console.WriteLine("\nShutdown requested via Ctrl+C...");
             RequestShutdown();
         };
-        
+
         AppDomain.CurrentDomain.ProcessExit += (sender, e) =>
         {
             Console.WriteLine("Process exit detected...");
             RequestShutdown();
         };
     }
-    
+
     /// <summary>
     /// Request a graceful shutdown
     /// </summary>
     public static void RequestShutdown()
     {
         if (_shutdownRequested) return;
-        
+
         _shutdownRequested = true;
         Console.WriteLine("Initiating graceful shutdown...");
-        
+
         // Execute all registered shutdown actions
         foreach (var action in _shutdownActions)
         {
@@ -51,10 +51,10 @@ public static class ShutdownHandler
                 Console.WriteLine($"Error during shutdown action: {ex.Message}");
             }
         }
-        
+
         Console.WriteLine("Shutdown complete.");
     }
-    
+
     /// <summary>
     /// Register an action to be executed during shutdown
     /// </summary>

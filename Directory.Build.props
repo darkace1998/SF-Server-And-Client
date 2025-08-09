@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <!-- Security-focused code analysis rules -->
+    <WarningsAsErrors>CA5350;CA5351;CA2100;CA3001;CA5384;CA5397</WarningsAsErrors>
+    
+    <!-- Suppress warnings that are not security-related or are by design -->
+    <WarningsNotAsErrors>
+      CA1724;  <!-- Type name conflicts with namespace - by design -->
+      CA1031;  <!-- Generic exception catching is acceptable for top-level handlers -->
+      CA1034;  <!-- Nested types are acceptable for message structures -->
+      CA1822;  <!-- Static methods suggestion - keep instance for future extensibility -->
+    </WarningsNotAsErrors>
+  </PropertyGroup>
+  
+  <!-- Global suppressions for specific analyzer warnings -->
+  <PropertyGroup>
+    <GlobalAnalyzerConfigFiles>$(MSBuildThisFileDirectory)security.globalconfig</GlobalAnalyzerConfigFiles>
+  </PropertyGroup>
+</Project>

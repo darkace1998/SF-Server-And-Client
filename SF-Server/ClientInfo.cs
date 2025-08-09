@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using Lidgren.Network;
 
 namespace SF_Server;
@@ -35,8 +35,8 @@ public class ClientInfo : IEquatable<ClientInfo>
     public void DeductHp(float amount)
     {
         Hp -= amount;
-        
-        if (Hp <= 0) 
+
+        if (Hp <= 0)
             IsAlive = false;
     }
 
@@ -47,12 +47,12 @@ public class ClientInfo : IEquatable<ClientInfo>
     }
 
     public override bool Equals(object obj) => obj is ClientInfo client && Equals(client.Address, Address);
-    
+
     public bool Equals(ClientInfo other) => other is not null && Equals(other.Address, Address);
 
     public override int GetHashCode() => Address.GetHashCode();
 
-    public override string ToString() 
-        => $"\nSteamID: {SteamID}\nName: {Username}\nAddress: {Address}\nAuthTicket: {AuthTicket.ToString().Truncate(10)}" 
+    public override string ToString()
+        => $"\nSteamID: {SteamID}\nName: {Username}\nAddress: {Address}\nAuthTicket: {AuthTicket.ToString().Truncate(10)}"
            + $"\nPlayerIndex: {PlayerIndex}\nPing: {Ping}";
 }

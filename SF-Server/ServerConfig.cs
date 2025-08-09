@@ -15,7 +15,7 @@ public class ServerConfig
     public string LogPath { get; set; } = "debug_log.txt";
     public int AuthDelayMs { get; set; } = 1000;
     public bool EnableConsoleOutput { get; set; } = true;
-    
+
     /// <summary>
     /// Load configuration from a JSON file
     /// </summary>
@@ -34,10 +34,10 @@ public class ServerConfig
         try
         {
             var json = File.ReadAllText(configPath);
-            var config = JsonSerializer.Deserialize<ServerConfig>(json, new JsonSerializerOptions 
-            { 
+            var config = JsonSerializer.Deserialize<ServerConfig>(json, new JsonSerializerOptions
+            {
                 PropertyNameCaseInsensitive = true,
-                WriteIndented = true 
+                WriteIndented = true
             });
             return config ?? new ServerConfig();
         }
@@ -48,7 +48,7 @@ public class ServerConfig
             return new ServerConfig();
         }
     }
-    
+
     /// <summary>
     /// Save configuration to a JSON file
     /// </summary>
@@ -57,9 +57,9 @@ public class ServerConfig
     {
         try
         {
-            var json = JsonSerializer.Serialize(this, new JsonSerializerOptions 
-            { 
-                WriteIndented = true 
+            var json = JsonSerializer.Serialize(this, new JsonSerializerOptions
+            {
+                WriteIndented = true
             });
             File.WriteAllText(configPath, json);
         }
@@ -68,7 +68,7 @@ public class ServerConfig
             Console.WriteLine($"Failed to save configuration to {configPath}: {ex.Message}");
         }
     }
-    
+
     /// <summary>
     /// Validate the configuration
     /// </summary>
@@ -80,28 +80,28 @@ public class ServerConfig
             Console.WriteLine("Error: Steam Web API token is required");
             return false;
         }
-        
+
         if (HostSteamId == 0)
         {
             Console.WriteLine("Error: Host Steam ID is required");
             return false;
         }
-        
+
         if (Port <= 0 || Port > 65535)
         {
             Console.WriteLine("Error: Port must be between 1 and 65535");
             return false;
         }
-        
+
         if (MaxPlayers <= 0 || MaxPlayers > 10)
         {
             Console.WriteLine("Error: Max players must be between 1 and 10");
             return false;
         }
-        
+
         return true;
     }
-    
+
     /// <summary>
     /// Apply command line arguments to override configuration values
     /// </summary>
@@ -129,7 +129,7 @@ public class ServerConfig
                         Console.WriteLine($"Invalid port '{args[i + 1]}', using default: {Port}");
                     }
                     break;
-                    
+
                 case "--steam_web_api_token":
                     SteamWebApiToken = args[i + 1];
                     if (!string.IsNullOrWhiteSpace(SteamWebApiToken))
@@ -141,7 +141,7 @@ public class ServerConfig
                         Console.WriteLine("Warning: Empty Steam Web API token provided");
                     }
                     break;
-                    
+
                 case "--host_steamid":
                     didParse = ulong.TryParse(args[i + 1], out var hostSteamId);
                     if (didParse && hostSteamId != 0)
@@ -154,7 +154,7 @@ public class ServerConfig
                         Console.WriteLine($"Invalid host Steam ID '{args[i + 1]}'");
                     }
                     break;
-                    
+
                 case "--max_players":
                     didParse = int.TryParse(args[i + 1], out var maxPlayers);
                     if (didParse && maxPlayers > 0 && maxPlayers <= 10)
@@ -167,7 +167,7 @@ public class ServerConfig
                         Console.WriteLine($"Invalid max players '{args[i + 1]}', using default: {MaxPlayers}");
                     }
                     break;
-                    
+
                 case "--config":
                     // Handle config file loading
                     var configFromFile = LoadFromFile(args[i + 1]);
@@ -180,7 +180,7 @@ public class ServerConfig
                     // Don't override credentials from config file for security
                     Console.WriteLine($"Configuration loaded from: {args[i + 1]}");
                     break;
-                    
+
                 default:
                     Console.WriteLine($"Unrecognized server argument '{parameter}', ignoring...");
                     break;

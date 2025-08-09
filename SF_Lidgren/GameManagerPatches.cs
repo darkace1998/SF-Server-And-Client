@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using HarmonyLib;
 using UnityEngine;
 
@@ -11,23 +11,23 @@ public static class GameManagerPatches
         var killPlayerMethod = AccessTools.Method(typeof(GameManager), nameof(GameManager.KillPlayer));
         var killPlayerMethodPrefix = new HarmonyMethod(typeof(GameManagerPatches)
             .GetMethod(nameof(KillPlayerMethodPrefix)));
-        
+
         //harmonyInstance.Patch(killPlayerMethod, prefix: killPlayerMethodPrefix);
     }
-    
+
     // TODO: Switch this to transpiler + postfix (for stats) at some point
     public static bool KillPlayerMethodPrefix(ref Controller playerToKill, ref Crown ___crown, ref LevelSelection ___levelSelector, GameManager __instance)
     {
         if (!MatchmakingHandler.RunningOnSockets) return true;
-        
-        if (__instance.playersAlive.Contains(playerToKill)) 
+
+        if (__instance.playersAlive.Contains(playerToKill))
             __instance.playersAlive.Remove(playerToKill);
 
         if (playerToKill.damager != null && !playerToKill.damager.isAI)
         {
-            if (___crown.crownBarrer == playerToKill) 
+            if (___crown.crownBarrer == playerToKill)
                 ___crown.SetNewKing(playerToKill.damager, false);
-            
+
             playerToKill.damager.OnKilledEnemy(playerToKill);
         }
 
@@ -35,13 +35,13 @@ public static class GameManagerPatches
         Controller curController = null;
         foreach (var controller in __instance.playersAlive)
         {
-            if (controller == null || controller.GetComponent<CharacterInformation>().isDead) 
+            if (controller == null || controller.GetComponent<CharacterInformation>().isDead)
                 continue;
-            
+
             curController = controller;
             numAlive++;
         }
-        
+
         if (numAlive <= 1)
         {
             Console.WriteLine("Less than 1 player is alive, ending round!");
@@ -54,8 +54,8 @@ public static class GameManagerPatches
                     Debug.Log("next level is: " + (MapType)nextLevel.MapType + " with index: " + BitConverter.ToInt32(nextLevel.MapData, 0));
                     var b = numAlive != 0 ? (byte)curController!.GetComponent<NetworkPlayer>().NetworkSpawnID : byte.MaxValue;
                     var lastWinnerSetter = AccessTools.PropertySetter(typeof(GameManager), nameof(GameManager.LastWinner));
-                    lastWinnerSetter.Invoke(__instance, new object[] {curController});
-                    
+                    lastWinnerSetter.Invoke(__instance, new object[] { curController });
+
                     Debug.Log("CALLING CHANGE MAP!!!");
                     __instance.mMultiplayerManager.ChangeMap(nextLevel, b);
                     //var flag = __instance.lastMapNumber.MapType == 2;
@@ -63,9 +63,9 @@ public static class GameManagerPatches
                 }
             }
             //else
-                //__instance.AllButOnePlayersDied();
+            //__instance.AllButOnePlayersDied();
         }
-        
+
         playerToKill.OnDeath();
         return false;
     }

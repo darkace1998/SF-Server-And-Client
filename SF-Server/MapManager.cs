@@ -29,11 +29,11 @@ public class MapManager
     {
         // For now, use random selection from basic maps
         // TODO: Implement custom map support and rotation lists
-        
+
         var mapId = _random.Next(0, 110); // Basic game maps range
         _currentMapId = mapId;
         _currentMapType = MapType.Standard;
-        
+
         return new MapData
         {
             MapType = _currentMapType,
@@ -50,7 +50,7 @@ public class MapManager
     {
         _currentMapId = 0;
         _currentMapType = MapType.Lobby;
-        
+
         return new MapData
         {
             MapType = MapType.Lobby,
@@ -69,10 +69,10 @@ public class MapManager
     {
         // TODO: Implement proper validation logic
         // For now, allow any map change
-        
+
         if (mapData == null || mapData.Length < 4)
             return false;
-            
+
         return true;
     }
 
@@ -93,17 +93,42 @@ public class MapManager
 /// <summary>
 /// Map data structure
 /// </summary>
-public struct MapData
+public struct MapData : IEquatable<MapData>
 {
     public MapType MapType;
     public int MapId;
     public byte[] Data; // Renamed from MapData to Data
+
+    public override bool Equals(object obj)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override int GetHashCode()
+    {
+        throw new NotImplementedException();
+    }
+
+    public static bool operator ==(MapData left, MapData right)
+    {
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(MapData left, MapData right)
+    {
+        return !(left == right);
+    }
+
+    public bool Equals(MapData other)
+    {
+        throw new NotImplementedException();
+    }
 }
 
 /// <summary>
 /// Types of maps
 /// </summary>
-public enum MapType : byte
+public enum MapType
 {
     Lobby = 0,
     Standard = 1,

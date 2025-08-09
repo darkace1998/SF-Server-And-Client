@@ -1,4 +1,4 @@
-﻿using HarmonyLib;
+using HarmonyLib;
 using Lidgren.Network;
 using Steamworks;
 
@@ -22,7 +22,7 @@ public static class P2PPackageHandlerPatch
             nameof(P2PPackageHandler.SendP2PPacketToServer));
         var sendP2PPacketToUserMethodPrefix = new HarmonyMethod(typeof(P2PPackageHandlerPatch)
             .GetMethod(nameof(SendP2PPacketToUserMethodPrefix)));
-        
+
         harmonyInstance.Patch(sendP2PPacketToUserMethod, prefix: sendP2PPacketToUserMethodPrefix);
         harmonyInstance.Patch(sendP2PPacketToServerMethod, prefix: sendP2PPacketToUserMethodPrefix);
     }
