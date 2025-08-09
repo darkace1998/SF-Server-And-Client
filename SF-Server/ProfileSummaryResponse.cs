@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace SF_Server;
 
@@ -6,7 +6,7 @@ public class ProfileSummaryResponse
 {
     [JsonConstructor]
     public ProfileSummaryResponse(JsonResponse response) => Response = response;
-    
+
     public JsonResponse Response { get; }
 
     public class Player

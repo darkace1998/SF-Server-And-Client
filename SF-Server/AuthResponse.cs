@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace SF_Server;
 
@@ -6,17 +6,17 @@ public class AuthResponse
 {
     [JsonConstructor]
     public AuthResponse(JsonResponse response) => Response = response;
-    
+
     public JsonResponse Response { get; }
 
     public override string ToString()
     {
         var @params = Response.Params;
-        
+
         return $"\nResult: {@params.Result}\nSteamid: {@params.Steamid}\nOwnersteamid: {@params.Ownersteamid}" +
                $"\nVacbanned: {@params.Vacbanned}\nPublisherbanned: {@params.Publisherbanned}";
     }
-    
+
     public class Params
     {
         [JsonConstructor]
@@ -27,7 +27,7 @@ public class AuthResponse
             Ownersteamid = ownersteamid;
             Vacbanned = vacbanned;
             Publisherbanned = publisherbanned;
-        }    
+        }
         public string Result { get; }
         public string Steamid { get; }
         public string Ownersteamid { get; }

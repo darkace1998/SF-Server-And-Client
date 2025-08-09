@@ -1,4 +1,4 @@
-﻿using HarmonyLib;
+using HarmonyLib;
 using Landfall.Network.Sockets;
 
 namespace SF_Lidgren;
@@ -17,13 +17,13 @@ public static class MultiplayerManagerSocketsPatches
     public static bool RequestClientInitMethodPrefix()
     {
         if (!MatchmakingHandler.RunningOnSockets) return true; // Not using dedicated server, run as normal
-        
+
         P2PPackageHandler.Instance.SendSocketP2PPacketToUser(NetworkUtils.LidgrenData.ServerConnection,
             NetworkUtils.EmptyByteArray,
             P2PPackageHandler.MsgType.ClientAccepted);
 
         return false;
     }
-    
-    
+
+
 }

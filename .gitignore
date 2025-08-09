@@ -1,0 +1,59 @@
+# Build Artifacts
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+
+# Development Files
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+
+# Game Dependencies (don't commit game files)
+SF_Lidgren/Assembly-CSharp.dll
+SF_Lidgren/Assembly-CSharp-firstpass.dll
+SF_Lidgren/UnityEngine.dll
+SF_Lidgren/Lidgren.Network.dll
+SF_Lidgren/Steamworks.NET.dll
+
+# BepInEx Dependencies
+SF_Lidgren/BepInEx.dll
+SF_Lidgren/0Harmony.dll
+
+# Configuration and Logs
+server_config.json
+debug_log.txt
+*.log
+
+# Environment Files
+.env
+
+# Docker
+server_logs/
+
+# Temporary Files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Package Files
+*.nupkg
+*.snupkg
+
+# Test Results
+TestResults/
+*.trx
+*.coverage
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Runtime
+*.pid

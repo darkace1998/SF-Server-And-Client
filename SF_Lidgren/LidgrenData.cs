@@ -1,4 +1,4 @@
-﻿using Lidgren.Network;
+using Lidgren.Network;
 using Steamworks;
 
 namespace SF_Lidgren;
@@ -14,5 +14,5 @@ public class LidgrenData
         AuthTicketHandler = handler;
         LocalClient = localClient;
         ServerConnection = serverConnection;
-    }    
+    }
 }

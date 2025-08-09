@@ -1,4 +1,4 @@
-﻿using HarmonyLib;
+using HarmonyLib;
 
 namespace SF_Lidgren;
 
@@ -17,7 +17,7 @@ internal static class PauseManagerPatches
     {
         if (!MatchmakingHandler.RunningOnSockets) // If playing vanilla p2p
             return;
-        
+
         NetworkUtils.ExitServer(false);
     }
 }

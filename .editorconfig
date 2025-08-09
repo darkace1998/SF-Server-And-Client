@@ -1,0 +1,48 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+[*.{cs,csx,vb,vbx}]
+indent_size = 4
+# Security: Enable all code analysis rules
+dotnet_analyzer_diagnostic.category-security.severity = warning
+dotnet_analyzer_diagnostic.category-reliability.severity = warning
+dotnet_analyzer_diagnostic.category-performance.severity = suggestion
+
+# Code quality rules
+dotnet_code_quality_unused_parameters = all:suggestion
+dotnet_remove_unnecessary_suppression_exclusions = none
+
+[*.cs]
+# C# formatting rules
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_creation = true
+csharp_new_line_before_members_in_anonymous_types = true
+
+# Security-focused rules
+dotnet_diagnostic.CA2007.severity = warning  # ConfigureAwait
+dotnet_diagnostic.CA5350.severity = error    # Weak cryptographic algorithm
+dotnet_diagnostic.CA5351.severity = error    # Broken cryptographic algorithm
+dotnet_diagnostic.CA2100.severity = error    # SQL injection
+dotnet_diagnostic.CA3001.severity = warning  # Potential SQL injection
+dotnet_diagnostic.CA3061.severity = warning  # XML schema validation
+dotnet_diagnostic.CA5384.severity = error    # DSA vulnerable
+dotnet_diagnostic.CA5397.severity = error    # SslProtocols deprecated
+
+[*.json]
+indent_size = 2
+
+[*.{yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

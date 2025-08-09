@@ -1,6 +1,6 @@
-﻿namespace SF_Server;
+namespace SF_Server;
 
-public struct Vector2
+public struct Vector2 : IEquatable<Vector2>
 {
     public float X;
     public float Y;
@@ -12,9 +12,34 @@ public struct Vector2
     }
 
     public override string ToString() => $"[X: {X}, Y: {Y}]";
+
+    public override bool Equals(object obj)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override int GetHashCode()
+    {
+        throw new NotImplementedException();
+    }
+
+    public static bool operator ==(Vector2 left, Vector2 right)
+    {
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(Vector2 left, Vector2 right)
+    {
+        return !(left == right);
+    }
+
+    public bool Equals(Vector2 other)
+    {
+        throw new NotImplementedException();
+    }
 }
 
-public struct Vector3
+public struct Vector3 : IEquatable<Vector3>
 {
     public float X;
     public float Y;
@@ -28,4 +53,29 @@ public struct Vector3
     }
 
     public override string ToString() => $"[X: {X}, Y: {Y} Z: {Z}]";
+
+    public override bool Equals(object obj)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override int GetHashCode()
+    {
+        throw new NotImplementedException();
+    }
+
+    public static bool operator ==(Vector3 left, Vector3 right)
+    {
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(Vector3 left, Vector3 right)
+    {
+        return !(left == right);
+    }
+
+    public bool Equals(Vector3 other)
+    {
+        throw new NotImplementedException();
+    }
 }

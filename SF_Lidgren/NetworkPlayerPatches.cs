@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using HarmonyLib;
 using Lidgren.Network;
 using MonoMod.Utils;
@@ -23,11 +23,11 @@ public class NetworkPlayerPatches
         var initNetworkSpawnIDMethod = AccessTools.Method(typeof(NetworkPlayer), nameof(NetworkPlayer.InitNetworkSpawnID));
         var initNetworkSpawnIDMethodPostfix = new HarmonyMethod(typeof(NetworkPlayerPatches)
             .GetMethod(nameof(InitNetworkSpawnIDMethodPostfix)));
-        
+
         var listenForPositionPackagesMethod = AccessTools.Method(typeof(NetworkPlayer), "ListenForPositionPackages");
         var listenForPositionPackagesMethodPrefix = new HarmonyMethod(typeof(NetworkPlayerPatches)
             .GetMethod(nameof(ListenForPositionPackagesMethodPrefix)));
-        
+
         var listenForEventPackagesMethod = AccessTools.Method(typeof(NetworkPlayer), "ListenForEventPackages");
         var listenForEventPackagesMethodPrefix = new HarmonyMethod(typeof(NetworkPlayerPatches)
             .GetMethod(nameof(ListenForEventPackagesMethodPrefix)));
@@ -36,12 +36,12 @@ public class NetworkPlayerPatches
         harmonyInstance.Patch(listenForPositionPackagesMethod, prefix: listenForPositionPackagesMethodPrefix);
         harmonyInstance.Patch(listenForEventPackagesMethod, prefix: listenForEventPackagesMethodPrefix);
     }
-    
+
     // Be able to act on PlayerUpdate packet without using reflection to invoke SyncClientState() every time
     public static void InitNetworkSpawnIDMethodPostfix(ref ushort networkSpawnID)
     {
         // Only want these delegates being created once on-join
-        if (!MatchmakingHandler.RunningOnSockets || networkSpawnID != GameManager.Instance.mMultiplayerManager.LocalPlayerIndex) 
+        if (!MatchmakingHandler.RunningOnSockets || networkSpawnID != GameManager.Instance.mMultiplayerManager.LocalPlayerIndex)
             return;
 
         NetworkUtils.PlayerUpdatePackets = new NetIncomingMessage[4];
@@ -57,7 +57,7 @@ public class NetworkPlayerPatches
         _syncClientWonWithRicochet = AccessTools.Method(typeof(NetworkPlayer), "SyncClientState").CreateFastDelegate();
         _syncClientWeaponThrow = AccessTools.Method(typeof(NetworkPlayer), "SyncClientWeaponThrow").CreateFastDelegate();
     }
-    
+
     // TODO: Cannot be implemented this way due to the queue being used for messages in NetPeer
     public static bool ListenForPositionPackagesMethodPrefix(NetworkPlayer __instance, ref bool ___mIsActive,
         ref bool ___mHasRecievedFirstPackage, ref ushort ___mNetworkSpawnID)
@@ -68,7 +68,7 @@ public class NetworkPlayerPatches
         var posMsg = NetworkUtils.PlayerUpdatePackets[___mNetworkSpawnID];
         if (posMsg?.Data is null) return false; // Is there a packet available? If not, exit the method
 
-        var timeSent = posMsg.ReadUInt32(); 
+        var timeSent = posMsg.ReadUInt32();
         var msgType = (P2PPackageHandler.MsgType)posMsg.ReadByte();
 
         // if (timeSent < MultiplayerManager.LastTimeStamp) // TODO: Implement logic for timeSent?
@@ -86,19 +86,19 @@ public class NetworkPlayerPatches
         return false;
     }
 
-    public static bool ListenForEventPackagesMethodPrefix(NetworkPlayer __instance, ref bool ___mIsActive, 
+    public static bool ListenForEventPackagesMethodPrefix(NetworkPlayer __instance, ref bool ___mIsActive,
         ref ushort ___mNetworkSpawnID)
     {
         if (!MatchmakingHandler.RunningOnSockets) return true;
         if (!___mIsActive) return false;
-        
+
         var eventMsg = NetworkUtils.PlayerEventPackets[___mNetworkSpawnID];
         if (eventMsg?.Data is null) return false; // Is there a packet available? If not, exit the method
-        
+
         var timeSent = eventMsg.ReadUInt32();
         var msgType = (P2PPackageHandler.MsgType)eventMsg.ReadByte();
         var data = eventMsg.ReadBytes(eventMsg.Data.Length - 5);
-        
+
         switch (msgType)
         {
             case P2PPackageHandler.MsgType.PlayerTookDamage:
@@ -132,7 +132,7 @@ public class NetworkPlayerPatches
                 Debug.LogError("Invalid Event Messagetype " + msgType + ", msg has channel: " + eventMsg.SequenceChannel);
                 break;
         }
-        
+
         NetworkUtils.LidgrenData.LocalClient.Recycle(eventMsg);
         return false;
     }

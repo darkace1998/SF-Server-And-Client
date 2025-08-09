@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 
 namespace SF_Server;
 
@@ -6,7 +6,7 @@ namespace SF_Server;
 public readonly struct SteamId : IEquatable<SteamId>, IComparable<SteamId>
 {
     public readonly ulong id;
-    
+
     //public SteamId() => id = 0;
     public SteamId(ulong steamId) => id = steamId;
 
@@ -20,7 +20,7 @@ public readonly struct SteamId : IEquatable<SteamId>, IComparable<SteamId>
 
     public override string ToString() => id.ToString();
 
-    public static bool operator ==(SteamId x, SteamId y) => (long) x.id == (long) y.id;
+    public static bool operator ==(SteamId x, SteamId y) => (long)x.id == (long)y.id;
 
     public static bool operator !=(SteamId x, SteamId y) => !(x == y);
 

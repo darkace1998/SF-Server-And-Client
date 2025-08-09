@@ -1,0 +1,28 @@
+# Security-focused global analyzer configuration
+
+is_global = true
+
+# Security rules - treat as errors
+dotnet_diagnostic.CA5350.severity = error    # Weak cryptographic algorithm
+dotnet_diagnostic.CA5351.severity = error    # Broken cryptographic algorithm  
+dotnet_diagnostic.CA2100.severity = error    # SQL injection
+dotnet_diagnostic.CA3001.severity = warning  # Potential SQL injection
+dotnet_diagnostic.CA5384.severity = error    # DSA vulnerable
+dotnet_diagnostic.CA5397.severity = error    # SslProtocols deprecated
+
+# Network security
+dotnet_diagnostic.CA2007.severity = warning  # ConfigureAwait for async calls
+dotnet_diagnostic.CA1062.severity = warning  # Parameter validation
+dotnet_diagnostic.CA1001.severity = warning  # Disposable field ownership
+
+# Suppress design warnings that are by choice
+dotnet_diagnostic.CA1724.severity = suggestion  # Type name conflicts
+dotnet_diagnostic.CA1031.severity = suggestion  # Generic exception catching
+dotnet_diagnostic.CA1034.severity = suggestion  # Nested types
+dotnet_diagnostic.CA1822.severity = suggestion  # Mark members as static
+
+# Performance and reliability
+dotnet_diagnostic.CA1819.severity = suggestion  # Properties should not return arrays
+dotnet_diagnostic.CA1002.severity = suggestion  # Generic collections
+dotnet_diagnostic.CA1024.severity = suggestion  # Use properties where appropriate
+dotnet_diagnostic.CA1067.severity = suggestion  # Override Object.Equals
