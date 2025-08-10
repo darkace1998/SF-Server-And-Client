@@ -1,4 +1,4 @@
-namespace SF_Server;
+namespace SFServer;
 
 /// <summary>
 /// Handles graceful server shutdown

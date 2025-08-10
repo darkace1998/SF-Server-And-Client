@@ -1,4 +1,4 @@
-using SF_Server;
+using SFServer;
 
 const string defaultConfigPath = "server_config.json";
 

@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace SF_Server;
+namespace SFServer;
 
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
 public readonly struct SteamId : IEquatable<SteamId>, IComparable<SteamId>

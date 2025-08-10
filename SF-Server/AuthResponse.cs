@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace SF_Server;
+namespace SFServer;
 
 public class AuthResponse
 {

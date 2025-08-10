@@ -1,152 +1,130 @@
+using System.Globalization;
 using System.Net;
 using Lidgren.Network;
 
-namespace SF_Server;
-
-public class ClientManager
+namespace SFServer
 {
-    public ClientInfo[] Clients { get; }
-    private readonly Dictionary<IPAddress, DateTime> _connectionAttempts;
-    private readonly TimeSpan _connectionCooldown = TimeSpan.FromSeconds(5);
-
-    public ClientManager(int numClients)
-    {
-        Clients = new ClientInfo[numClients];
-        _connectionAttempts = new Dictionary<IPAddress, DateTime>();
-    }
-
     /// <summary>
-    /// Check if a connection attempt is allowed from this IP
+    /// Manages connected clients and their state.
     /// </summary>
-    /// <param name="address">IP address to check</param>
-    /// <returns>True if connection is allowed</returns>
-    public bool IsConnectionAllowed(IPAddress address)
+    public class ClientManager
     {
-        if (!_connectionAttempts.TryGetValue(address, out var lastAttempt))
-            return true;
+        private const string RemovedOldConnectionMessage = "Removed old connection to allow new Steam ID from same IP";
+        private const string ServerFullMessage = "Server is full, cannot add new client";
+        private const string AddedNewClientFormat = "Added new client at index {0}";
+        private const string ClientRemovedFormat = "Client removed at index {0}";
+        private readonly ClientInfo[] _clients;
+        private readonly Dictionary<IPAddress, DateTime> _connectionAttempts;
+        private readonly TimeSpan _connectionCooldown = TimeSpan.FromSeconds(5);
 
-        return DateTime.UtcNow - lastAttempt > _connectionCooldown;
-    }
+        public ClientInfo[] GetClients() => (ClientInfo[])_clients.Clone();
+        public IEnumerable<ClientInfo> AllClients => _clients;
 
-    /// <summary>
-    /// Record a connection attempt from an IP address
-    /// </summary>
-    /// <param name="address">IP address</param>
-    public void RecordConnectionAttempt(IPAddress address)
-    {
-        _connectionAttempts[address] = DateTime.UtcNow;
-
-        // Clean up old connection attempts (older than 1 hour)
-        var expiredTime = DateTime.UtcNow - TimeSpan.FromHours(1);
-        var expiredKeys = _connectionAttempts
-            .Where(kvp => kvp.Value < expiredTime)
-            .Select(kvp => kvp.Key)
-            .ToList();
-
-        foreach (var key in expiredKeys)
+        public ClientManager(int numClients)
         {
-            _connectionAttempts.Remove(key);
-        }
-    }
-
-    /// <summary>
-    /// Add a new client, preventing duplicate connections
-    /// </summary>
-    /// <param name="steamID">Steam ID of the client</param>
-    /// <param name="steamUsername">Steam username</param>
-    /// <param name="authTicket">Authentication ticket</param>
-    /// <param name="address">IP address</param>
-    /// <returns>True if client was added successfully</returns>
-    public bool AddNewClient(SteamId steamID, string steamUsername, AuthTicket authTicket, IPAddress address)
-    {
-        // Check for existing client with same Steam ID
-        var existingClient = GetClient(steamID);
-        if (existingClient != null)
-        {
-            Console.WriteLine($"Client with Steam ID {steamID} is already connected at index {existingClient.PlayerIndex}");
-
-            // Update the address in case of IP change (reconnection)
-            existingClient.Address = address;
-            existingClient.Status = NetConnectionStatus.Connected;
-            Console.WriteLine($"Updated existing client connection: {existingClient}");
-            return false; // Don't add a new client, but connection is valid
+            _clients = new ClientInfo[numClients];
+            _connectionAttempts = new Dictionary<IPAddress, DateTime>();
         }
 
-        // Check for existing client with same IP address
-        var existingIpClient = GetClient(address);
-        if (existingIpClient != null)
+        public bool IsConnectionAllowed(IPAddress address)
         {
-            Console.WriteLine($"Client with IP {address} is already connected with Steam ID {existingIpClient.SteamID}");
-
-            // Remove the old connection to allow the new one
-            RemoveClient(existingIpClient);
-            Console.WriteLine("Removed old connection to allow new Steam ID from same IP");
+            if (!_connectionAttempts.TryGetValue(address, out var lastAttempt))
+                return true;
+            return DateTime.UtcNow - lastAttempt > _connectionCooldown;
         }
 
-        var playerIndex = GetEmptyPlayerIndex();
-        if (playerIndex == -1)
+        public void RecordConnectionAttempt(IPAddress address)
         {
-            Console.WriteLine("Server is full, cannot add new client");
-            return false;
-        }
-
-        var newClient = new ClientInfo(steamID, steamUsername, authTicket, address, playerIndex);
-        Clients[playerIndex] = newClient;
-
-        Console.WriteLine($"Added new client at index {playerIndex}!");
-        Console.WriteLine(newClient.ToString());
-        return true;
-    }
-
-    public void RemoveClient(ClientInfo removedClient)
-    {
-        for (var i = 0; i < Clients.Length; i++)
-        {
-            var client = Clients[i];
-
-            if (client is not null && client.Equals(removedClient))
+            _connectionAttempts[address] = DateTime.UtcNow;
+            var expiredTime = DateTime.UtcNow - TimeSpan.FromHours(1);
+            var expiredKeys = _connectionAttempts
+                .Where(kvp => kvp.Value < expiredTime)
+                .Select(kvp => kvp.Key)
+                .ToList();
+            foreach (var key in expiredKeys)
             {
-                Clients[i] = null; // Frees up spot for new player
-                Console.WriteLine("Client removed at index: " + i);
-                return;
+                _connectionAttempts.Remove(key);
             }
         }
-    }
 
-    public void RemoveDisconnectedClients()
-    {
-        for (var i = 0; i < Clients.Length; i++)
+        public bool AddNewClient(SteamId steamID, string steamUsername, AuthTicket authTicket, IPAddress address)
         {
-            var client = Clients[i];
-
-            if (client is not null && client.Status == NetConnectionStatus.Disconnected)
-                Clients[i] = null; // Frees up spot for new player
+            var existingClient = GetClient(steamID);
+            if (existingClient != null)
+            {
+                Console.WriteLine($"Client with Steam ID {steamID} is already connected at index {existingClient.PlayerIndex}");
+                existingClient.Address = address;
+                existingClient.Status = NetConnectionStatus.Connected;
+                Console.WriteLine($"Updated existing client connection: {existingClient}");
+                return false;
+            }
+            var existingIpClient = GetClient(address);
+            if (existingIpClient != null)
+            {
+                Console.WriteLine(RemovedOldConnectionMessage);
+                RemoveClient(existingIpClient);
+                Console.WriteLine(RemovedOldConnectionMessage);
+            }
+            var playerIndex = GetEmptyPlayerIndex();
+            if (playerIndex == -1)
+            {
+                Console.WriteLine(ServerFullMessage);
+                return false;
+            }
+            var newClient = new ClientInfo(steamID, steamUsername, authTicket, address, playerIndex);
+            _clients[playerIndex] = newClient;
+            Console.WriteLine(string.Format(CultureInfo.InvariantCulture, AddedNewClientFormat, playerIndex));
+            Console.WriteLine(newClient.ToString());
+            return true;
         }
+
+        public void RemoveClient(ClientInfo removedClient)
+        {
+            for (var i = 0; i < _clients.Length; i++)
+            {
+                var client = _clients[i];
+                if (client is not null && client.Equals(removedClient))
+                {
+                    _clients[i] = null;
+                    Console.WriteLine(string.Format(CultureInfo.InvariantCulture, ClientRemovedFormat, i));
+                    return;
+                }
+            }
+        }
+
+        public void RemoveDisconnectedClients()
+        {
+            for (var i = 0; i < _clients.Length; i++)
+            {
+                var client = _clients[i];
+                if (client is not null && client.Status == NetConnectionStatus.Disconnected)
+                    _clients[i] = null;
+            }
+        }
+
+        private int GetEmptyPlayerIndex()
+        {
+            for (var i = 0; i < _clients.Length; i++)
+                if (_clients[i] is null)
+                    return i;
+            return -1;
+        }
+
+        public void PostRoundCleanup()
+        {
+            foreach (var client in _clients)
+                client?.Revive();
+        }
+
+        public int GetNumLivingClients() => _clients.Count(client => client != null && client.IsAlive);
+
+        public ClientInfo GetClient(IPAddress address)
+            => Array.Find(_clients, player => player is not null && Equals(player.Address, address));
+
+        public ClientInfo GetClient(int playerIndex)
+            => _clients[playerIndex];
+
+        public ClientInfo GetClient(SteamId id)
+            => Array.Find(_clients, player => player is not null && player.SteamID == id);
     }
-
-    private int GetEmptyPlayerIndex()
-    {
-        for (var i = 0; i < Clients.Length; i++)
-            if (Clients[i] is null)
-                return i;
-
-        return -1;
-    }
-
-    public void PostRoundCleanup()
-    {
-        foreach (var client in Clients)
-            client.Revive();
-    }
-
-    public int GetNumLivingClients() => Clients.Count(client => client.IsAlive);
-
-    public ClientInfo GetClient(IPAddress address)
-        => Clients.FirstOrDefault(player => player is not null && Equals(player.Address, address));
-
-    public ClientInfo GetClient(int playerIndex)
-        => Clients[playerIndex];
-
-    public ClientInfo GetClient(SteamId id)
-        => Clients.FirstOrDefault(player => player is not null && player.SteamID == id);
 }

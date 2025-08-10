@@ -2,7 +2,7 @@ using System.Text;
 using Lidgren.Network;
 using System.Text.Json;
 
-namespace SF_Server;
+namespace SFServer;
 
 /// <summary>
 /// SF-Server main server class handling game server operations

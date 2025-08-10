@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace SF_Server;
+namespace SFServer;
 
 /// <summary>
 /// Configuration class for the SF Server

@@ -13,7 +13,7 @@
     BepInEx packages temporarily commented out due to source unavailability
     Will need to be restored when BepInEx NuGet source is accessible
     -->
-    <!--
+    <!-- 
     <ItemGroup>
         <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
         <PackageReference Include="BepInEx.Core" Version="5.*" />
@@ -30,7 +30,7 @@
     Game assembly references that would need to be provided manually
     These should be copied from the Stick Fight game installation
     -->
-    <!--
+    
     <ItemGroup>
       <Reference Include="Assembly-CSharp">
         <HintPath>Assembly-CSharp.dll</HintPath>
@@ -52,5 +52,5 @@
       <None Remove="Assembly-CSharp-firstpass.dll" />
       <None Remove="Lidgren.Network.dll" />
     </ItemGroup>
-    -->
+    
 </Project>

@@ -1,6 +1,6 @@
 using Lidgren.Network;
 
-namespace SF_Server;
+namespace SFServer;
 
 public class PacketWorker
 {
