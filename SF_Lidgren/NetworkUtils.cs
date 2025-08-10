@@ -23,6 +23,56 @@ public static class NetworkUtils
     public static int PacketsSent { get; private set; }
     public static int PacketsReceived { get; private set; }
 
+    /// <summary>
+    /// Validates and sanitizes string input to prevent enum parsing issues
+    /// </summary>
+    /// <param name="input">Input string to validate</param>
+    /// <param name="fallback">Fallback value if input is invalid</param>
+    /// <returns>Sanitized string</returns>
+    public static string SanitizeStringInput(string input, string fallback = "")
+    {
+        if (string.IsNullOrEmpty(input))
+            return fallback;
+            
+        // Remove potentially problematic characters
+        var sanitized = input.Trim();
+        
+        // Check for known problematic values
+        if (sanitized.Equals("blubb", System.StringComparison.OrdinalIgnoreCase) ||
+            sanitized.Equals("undefined", System.StringComparison.OrdinalIgnoreCase) ||
+            sanitized.Equals("null", System.StringComparison.OrdinalIgnoreCase))
+        {
+            Debug.LogWarning($"Detected problematic input '{input}', using fallback '{fallback}'");
+            return fallback;
+        }
+        
+        return sanitized;
+    }
+
+    /// <summary>
+    /// Safely attempts to parse an enum with fallback handling
+    /// </summary>
+    /// <typeparam name="T">Enum type</typeparam>
+    /// <param name="input">String to parse</param>
+    /// <param name="fallback">Fallback enum value</param>
+    /// <returns>Parsed enum or fallback</returns>
+    public static T SafeParseEnum<T>(string input, T fallback) where T : struct
+    {
+        try
+        {
+            var sanitized = SanitizeStringInput(input, fallback.ToString());
+            var result = (T)System.Enum.Parse(typeof(T), sanitized, true);
+            return result;
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"Failed to parse enum '{input}' as {typeof(T).Name}: {ex.Message}");
+        }
+        
+        Debug.LogWarning($"Using fallback value '{fallback}' for enum parsing of '{input}'");
+        return fallback;
+    }
+
     public static void SendPacketToServer(byte[] data, P2PPackageHandler.MsgType messageType,
         NetDeliveryMethod sendMethod = NetDeliveryMethod.ReliableOrdered, int channel = 0)
     {
@@ -30,6 +80,12 @@ public static class NetworkUtils
         {
             Debug.LogWarning("Attempted to send packet when not connected to server");
             return;
+        }
+
+        if (data == null)
+        {
+            Debug.LogWarning("Attempted to send null data, using empty array");
+            data = EmptyByteArray;
         }
 
         try
@@ -48,6 +104,14 @@ public static class NetworkUtils
         {
             Debug.LogError($"Failed to send packet: {ex.Message}");
             LastError = $"Send packet failed: {ex.Message}";
+            
+            // Try to handle common issues
+            if (ex.Message.Contains("disposed") || ex.Message.Contains("shutdown"))
+            {
+                Debug.LogWarning("Network client appears to be disposed, resetting connection state");
+                IsConnecting = false;
+                ConnectionTime = 0f;
+            }
         }
     }
 

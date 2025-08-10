@@ -26,6 +26,32 @@ public class TempGUI : MonoBehaviour
     private void Start()
     {
         Debug.Log("Started SF_Lidgren GUI Manager!");
+        
+        // Initialize safe defaults to prevent undefined behavior
+        try
+        {
+            // Ensure proper framerate handling
+            if (Application.targetFrameRate <= 0)
+            {
+                Application.targetFrameRate = 60; // Set reasonable default
+                Debug.Log("Set default framerate to 60 FPS");
+            }
+            
+            // Initialize connection defaults
+            if (string.IsNullOrEmpty(Address))
+            {
+                Address = "localhost";
+            }
+            
+            if (Port <= 0)
+            {
+                Port = 1337;
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Error during TempGUI Start initialization: {ex.Message}");
+        }
     }
 
     private void InitializeStyles()
