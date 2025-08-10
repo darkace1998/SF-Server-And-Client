@@ -1,0 +1,135 @@
+name: Security Analysis
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run security scan daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  security-scan:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Restore dependencies
+      run: dotnet restore SF-Server/SF-Server.csproj
+      
+    - name: Run security analysis
+      run: |
+        echo "=== Security Analysis Report ===" | tee security-report.txt
+        echo "Generated: $(date)" | tee -a security-report.txt
+        echo "" | tee -a security-report.txt
+        
+        # Check for vulnerable packages
+        echo "🔍 Checking for vulnerable NuGet packages..." | tee -a security-report.txt
+        cd SF-Server && dotnet list package --vulnerable --include-transitive 2>&1 | tee -a ../security-report.txt || echo "No vulnerable packages found" | tee -a ../security-report.txt
+        cd ..
+        echo "" | tee -a security-report.txt
+        
+        # Build with security analyzers
+        echo "🔒 Running static security analysis..." | tee -a security-report.txt
+        dotnet build SF-Server/SF-Server.csproj \
+          --configuration Release \
+          --no-restore \
+          --verbosity normal \
+          --property EnableNETAnalyzers=true \
+          --property AnalysisLevel=latest \
+          --property AnalysisMode=All \
+          2>&1 | grep -E "(CA[0-9]{4}|SecurityCodeScan|S[0-9]{4})" | tee -a security-report.txt || echo "No security warnings found" | tee -a security-report.txt
+          
+    - name: Check for hardcoded secrets
+      run: |
+        echo "" | tee -a security-report.txt
+        echo "🔑 Scanning for potential hardcoded secrets..." | tee -a security-report.txt
+        
+        # Simple regex patterns for common secrets
+        echo "Checking for API keys..." | tee -a security-report.txt
+        grep -r -n -E "(api[_-]?key|apikey|secret[_-]?key)" SF-Server/ --include="*.cs" || echo "No API key patterns found" | tee -a security-report.txt
+        
+        echo "Checking for tokens..." | tee -a security-report.txt
+        grep -r -n -E "(token|password|pass)" SF-Server/ --include="*.cs" | grep -v "// " | head -5 || echo "No suspicious token patterns found" | tee -a security-report.txt
+        
+    - name: Analyze dependencies
+      run: |
+        echo "" | tee -a security-report.txt
+        echo "📦 Dependency Analysis..." | tee -a security-report.txt
+        cd SF-Server && dotnet list package | tee -a ../security-report.txt
+        cd ..
+        
+    - name: Upload security report
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-analysis-report
+        path: security-report.txt
+        
+    - name: Fail on critical vulnerabilities
+      run: |
+        # Check if any critical vulnerabilities were found
+        if grep -q "Critical" security-report.txt; then
+          echo "❌ Critical security vulnerabilities found!"
+          exit 1
+        else
+          echo "✅ No critical security vulnerabilities detected"
+        fi
+
+  code-analysis:
+    name: Static Code Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Restore dependencies
+      run: dotnet restore SF-Server/SF-Server.csproj
+      
+    - name: Run comprehensive analysis
+      run: |
+        echo "=== Code Analysis Report ===" | tee code-analysis.txt
+        echo "Generated: $(date)" | tee -a code-analysis.txt
+        echo "" | tee -a code-analysis.txt
+        
+        # Build with all analyzers
+        dotnet build SF-Server/SF-Server.csproj \
+          --configuration Release \
+          --no-restore \
+          --verbosity diagnostic \
+          2>&1 | tee build-full.log
+          
+        # Summary of issues
+        echo "📊 Analysis Summary:" | tee -a code-analysis.txt
+        echo "Total warnings: $(grep -c 'warning' build-full.log || echo 0)" | tee -a code-analysis.txt
+        echo "Total errors: $(grep -c 'error' build-full.log || echo 0)" | tee -a code-analysis.txt
+        echo "Security warnings (CA rules): $(grep -c 'CA[0-9][0-9][0-9][0-9]' build-full.log || echo 0)" | tee -a code-analysis.txt
+        echo "SonarAnalyzer warnings (S rules): $(grep -c 'S[0-9][0-9][0-9][0-9]' build-full.log || echo 0)" | tee -a code-analysis.txt
+        echo "" | tee -a code-analysis.txt
+        
+        # High priority security issues
+        echo "🚨 High Priority Security Issues:" | tee -a code-analysis.txt
+        grep -E "(CA5[0-9][0-9][0-9]|CA2[0-9][0-9][0-9]|SecurityCodeScan)" build-full.log | head -20 || echo "None found" | tee -a code-analysis.txt
+        
+    - name: Upload code analysis results
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-analysis-full-report
+        path: |
+          code-analysis.txt
+          build-full.log
