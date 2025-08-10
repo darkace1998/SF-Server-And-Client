@@ -1,5 +1,6 @@
 using Steamworks;
 using UnityEngine;
+using Lidgren.Network;
 
 namespace SF_Lidgren;
 
@@ -85,7 +86,7 @@ public class TempGUI : MonoBehaviour
         GUILayout.Space(10);
 
         // Connection Section
-        GUILayout.Label("Server Connection:", EditorStyles.boldLabel);
+        GUILayout.Label("Server Connection:", _headerStyle);
         GUILayout.BeginHorizontal();
         GUILayout.Label("Address:", GUILayout.Width(60));
         Address = GUILayout.TextField(Address, GUILayout.ExpandWidth(true));
@@ -126,7 +127,7 @@ public class TempGUI : MonoBehaviour
         GUILayout.Space(10);
 
         // Status Section
-        GUILayout.Label("Status:", EditorStyles.boldLabel);
+        GUILayout.Label("Status:", _headerStyle);
         _statusStyle.normal.textColor = _statusColor;
         GUILayout.Label(connectionStatus, _statusStyle);
 

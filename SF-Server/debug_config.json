@@ -1,0 +1,10 @@
+{
+  "Port": 1337,
+  "SteamWebApiToken": "DEVELOPMENT_TOKEN_REPLACE_WITH_REAL",
+  "HostSteamId": 76561198000000000,
+  "MaxPlayers": 4,
+  "EnableLogging": true,
+  "LogPath": "debug_log.txt",
+  "AuthDelayMs": 1000,
+  "EnableConsoleOutput": true
+}
