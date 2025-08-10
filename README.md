@@ -21,6 +21,7 @@ Stick Fight is a physics-based couch/online fighting game where you battle it ou
 ## 📋 Table of Contents
 
 - [🚀 Quick Start](#-quick-start)
+- [🎮 How to Join a Server](#-how-to-join-a-server)
 - [🏗️ Architecture Overview](#️-architecture-overview)
 - [📖 Documentation](#-documentation)
 - [🌟 Features](#-features)
@@ -112,6 +113,211 @@ This project provides:
    - Download the latest client plugin from releases
    - Place `SF_Lidgren.dll` in `BepInEx\plugins` directory
    - Start the game and join servers via the in-game GUI
+
+## 🎮 How to Join a Server
+
+Ready to play on a dedicated SF-Server? This comprehensive guide will walk you through everything you need to connect and start playing!
+
+### 📋 Prerequisites
+
+Before you can join any SF-Server, make sure you have:
+
+1. **Stick Fight: The Game** - Installed and working via Steam
+2. **BepInEx 5.x** - The modding framework (required for the client plugin)
+3. **SF_Lidgren Client Plugin** - The mod that enables server connections
+
+### 🔧 Step 1: Install BepInEx
+
+If you don't have BepInEx installed yet:
+
+1. **Download BepInEx 5.x** from [GitHub Releases](https://github.com/BepInEx/BepInEx/releases)
+   - Choose `BepInEx_x64_5.x.x.x.zip` for 64-bit systems (most common)
+   - Choose `BepInEx_x86_5.x.x.x.zip` for 32-bit systems
+
+2. **Locate your Stick Fight game folder**:
+   - **Windows**: `C:\Program Files (x86)\Steam\steamapps\common\StickFight\`
+   - **Linux**: `~/.steam/steam/steamapps/common/StickFight/`
+   - **macOS**: `~/Library/Application Support/Steam/steamapps/common/StickFight/`
+
+3. **Extract BepInEx**:
+   - Extract all files from the BepInEx zip directly into your Stick Fight game folder
+   - The folder structure should look like: `StickFight/BepInEx/`, `StickFight/winhttp.dll`, etc.
+
+4. **Initialize BepInEx**:
+   - Launch Stick Fight: The Game once
+   - Wait for the game to fully load, then close it
+   - This creates the necessary BepInEx folders
+
+### 📦 Step 2: Install the SF_Lidgren Client Plugin
+
+1. **Download the Plugin**:
+   - Go to the [Releases page](https://github.com/darkace1998/SF-Server-And-Client/releases)
+   - Download the latest `SF_Lidgren.dll` file
+
+2. **Install the Plugin**:
+   - Navigate to your Stick Fight game folder
+   - Go to `BepInEx/plugins/` (create the `plugins` folder if it doesn't exist)
+   - Copy `SF_Lidgren.dll` into the `plugins` folder
+
+3. **Verify Installation**:
+   - Launch Stick Fight: The Game
+   - Press **F1** - you should see a server connection interface
+   - If you see the interface, the plugin is working correctly!
+
+### 🌐 Step 3: Connect to a Server
+
+#### Method 1: Using the In-Game Interface (Recommended)
+
+1. **Launch the Game** and get to the main menu
+2. **Press F1** to open the SF-Server connection interface
+3. **Enter Server Details**:
+   - **Server IP**: The IP address of the server (e.g., `192.168.1.100` or `myserver.com`)
+   - **Port**: The server port (default: `1337`)
+   - **Player Name**: Your display name (optional, uses Steam name by default)
+
+4. **Click "Connect"** and wait for the connection to establish
+5. **Success!** You should see connection status and be able to join games
+
+#### Method 2: Direct IP Connection
+
+If you have a server IP and port:
+
+1. Open the connection interface (F1)
+2. Enter the full address: `IP:PORT` (e.g., `192.168.1.100:1337`)
+3. Click Connect
+
+#### Method 3: Localhost/Local Network
+
+For testing or local servers:
+
+1. Use `localhost:1337` or `127.0.0.1:1337` for same-machine servers
+2. Use your local IP (e.g., `192.168.1.xxx:1337`) for LAN servers
+
+### 🔍 Step 4: Verify Your Connection
+
+Once connected, you should see:
+
+- ✅ **Connection Status**: "Connected" in the interface
+- ✅ **Player List**: Other connected players (if any)
+- ✅ **Chat**: Ability to send and receive messages
+- ✅ **Game Lobby**: Access to server games and matches
+
+### 🎯 Finding Servers to Join
+
+#### Public Servers
+- Check community forums and Discord servers
+- Look for server announcements in Stick Fight communities
+- Ask friends who host SF-Servers for their connection details
+
+#### Private Servers
+- Get connection details from the server administrator
+- May require password or whitelist access
+- Often shared through Discord or private messages
+
+#### Local Network Servers
+- Perfect for LAN parties or home networks
+- Use local IP addresses (192.168.x.x or 10.x.x.x)
+- All players must be on the same network
+
+### 🔧 Troubleshooting Connection Issues
+
+#### "Plugin Not Loading" or "No F1 Interface"
+
+**Possible Causes**:
+- BepInEx not installed correctly
+- Plugin in wrong folder
+- Game/BepInEx version mismatch
+
+**Solutions**:
+1. Verify BepInEx installation by checking for `BepInEx/LogOutput.log`
+2. Ensure `SF_Lidgren.dll` is in `BepInEx/plugins/`
+3. Check BepInEx console (if enabled) for error messages
+4. Try reinstalling both BepInEx and the plugin
+
+#### "Cannot Connect to Server"
+
+**Possible Causes**:
+- Server offline or unreachable
+- Wrong IP address or port
+- Firewall blocking connection
+- Network issues
+
+**Solutions**:
+1. **Verify Server Info**: Double-check IP address and port
+2. **Test Basic Connectivity**: Try pinging the server IP
+3. **Check Firewall**: Temporarily disable firewall for testing
+4. **Try Different Network**: Test from another location/network
+5. **Contact Server Admin**: Verify server is running and accessible
+
+#### "Connection Timeout"
+
+**Solutions**:
+1. **Server Overloaded**: Try connecting later
+2. **Network Issues**: Check your internet connection
+3. **Wrong Port**: Verify the correct port number
+4. **Server Configuration**: Contact the server administrator
+
+#### "Authentication Failed"
+
+**Solutions**:
+1. **Steam Login**: Ensure you're logged into Steam
+2. **Steam Profile**: Make sure your Steam profile is public
+3. **Server Settings**: Check if server requires specific authentication
+4. **Restart Game**: Try restarting both the game and Steam
+
+### 💡 Pro Tips for Better Connections
+
+#### Connection Quality
+- **Use Wired Internet**: Ethernet connections are more stable than Wi-Fi
+- **Close Background Apps**: Reduce network usage from other applications
+- **Check Ping**: Lower ping = better gameplay experience
+
+#### Server Selection
+- **Geographic Proximity**: Choose servers closer to your location
+- **Player Count**: Servers with moderate player counts often perform better
+- **Server Specs**: Well-configured servers provide smoother gameplay
+
+#### Multiplayer Etiquette
+- **Be Respectful**: Follow server rules and be kind to other players
+- **Good Sportsmanship**: Enjoy the game and congratulate good plays
+- **Report Issues**: Help server admins by reporting bugs or problems
+
+### 📱 Advanced Connection Options
+
+#### Custom Server Ports
+- Servers may use non-standard ports (not 1337)
+- Always verify the correct port with the server administrator
+- Common alternative ports: 7777, 8080, 25565
+
+#### VPN Considerations
+- Some servers may not allow VPN connections
+- VPNs can increase latency and reduce performance
+- If using a VPN, choose servers close to your VPN exit point
+
+#### Server Passwords
+- Some servers require passwords for access
+- Enter passwords in the connection interface when prompted
+- Keep server passwords secure and don't share publicly
+
+### 🎮 What's Next?
+
+Once you're connected:
+
+1. **Explore Game Modes**: Try different maps and game variants
+2. **Meet the Community**: Chat with other players and make friends
+3. **Join Regular Games**: Many servers have scheduled events or tournaments
+4. **Provide Feedback**: Help server admins improve by sharing your experience
+
+### 🆘 Still Need Help?
+
+If you're still having trouble connecting:
+
+1. **Check Documentation**: Review the [Client Setup Guide](CLIENT_SETUP.md) for technical details
+2. **Community Support**: Ask for help in the [Community & Support](#-community--support) section
+3. **Report Issues**: Create a [GitHub Issue](https://github.com/darkace1998/SF-Server-And-Client/issues) with your problem details
+4. **Server-Specific Help**: Contact the administrator of the specific server you're trying to join
+
+**Happy Gaming!** 🎮 You're now ready to enjoy Stick Fight: The Game on dedicated servers!
 
 ## ⚙️ Configuration
 
