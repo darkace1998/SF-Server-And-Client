@@ -621,30 +621,51 @@ public class Server : IDisposable
             }
         }
 
-        // Check for round end conditions
+        // Check for round end conditions and handle map changes
         var alivePlayers = _clientMgr.GetNumLivingClients();
         if (alivePlayers <= 1 && _clientMgr.Clients.Count(c => c != null) > 1)
         {
             Console.WriteLine($"Round ending - {alivePlayers} players remaining");
-            // Round end logic could be implemented here
+            
+            // Implement server-sent map packet for round transitions
+            if (alivePlayers == 0)
+            {
+                // No survivors - send random map change
+                var msg = _masterServer.CreateMessage();
+                msg.Write(byte.MaxValue); // No winner
+                msg.Write((byte)0); // Default map type (lobby)
+                msg.Write(_rand.Next(0, 110)); // Random map ID
+                
+                SendPacketToAllUsers(
+                    msg.Data,
+                    SfPacketType.MapChange,
+                    null,
+                    NetDeliveryMethod.ReliableOrdered
+                );
+                
+                Console.WriteLine("Sent map change packet - no survivors");
+            }
+            else if (attackerClient != null)
+            {
+                // Winner exists - send map change with winner info
+                var msg = _masterServer.CreateMessage();
+                msg.Write((byte)attackerClient.PlayerIndex); // Winner index
+                msg.Write((byte)0); // Default map type
+                msg.Write(_rand.Next(0, 110)); // Random map ID
+                
+                SendPacketToAllUsers(
+                    msg.Data,
+                    SfPacketType.MapChange,
+                    null,
+                    NetDeliveryMethod.ReliableOrdered
+                );
+                
+                Console.WriteLine($"Sent map change packet - winner: {attackerClient.Username}");
+            }
+            
+            // Clean up round state
+            _clientMgr.PostRoundCleanup();
         }
-
-        // TODO: Have server send out map packet--Integrate custom orders and custom maps
-        //if (damagedClient.IsAlive || _clientMgr.GetNumLivingClients() != 0) return;
-        // Round is over, 1 player left living
-
-        //_clientMgr.PostRoundCleanup();
-
-        // Console.WriteLine("Round ended, attempting to change map!");
-        // var msg = _masterServer.CreateMessage(); // winner index, maptype, mapdata
-        // msg.Write((byte)attackerClient.PlayerIndex);
-        // msg.Write(0);
-        // msg.Write(_rand.Next(0, 110));
-        //
-        // SendPacketToAllUsers(
-        //     msg.Data,
-        //     SfPacketType.MapChange
-        // );
     }
 
     public void OnMapChanged(NetConnection user, NetIncomingMessage mapMsgData)

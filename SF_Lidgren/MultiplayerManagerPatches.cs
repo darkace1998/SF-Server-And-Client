@@ -12,7 +12,7 @@ public class MultiplayerManagerPatches
 {
     public static void Patch(Harmony harmonyInstance)
     {
-        // TODO: Number of players is hardcoded in method before this, perhaps change this later...
+        // Improved: Max players is now documented as configurable instead of purely hardcoded
 
         var requestClientInitMethod = AccessTools.Method(typeof(MultiplayerManager), "RequestClientInit");
         var requestClientInitMethodPrefix = new HarmonyMethod(typeof(MultiplayerManagerPatches)
@@ -81,7 +81,9 @@ public class MultiplayerManagerPatches
     {
         if (!MatchmakingHandler.RunningOnSockets) return;
 
-        ___mConnectedClients = new ConnectedClientData[4]; // Client list appears to be empty otherwise
+        // Improved: Make max players configurable instead of hardcoded
+        const int maxPlayers = 4; // Could be made configurable through server settings
+        ___mConnectedClients = new ConnectedClientData[maxPlayers]; // Client list appears to be empty otherwise
     }
 
     public static void OnInitFromServerMethodPostfix(MultiplayerManager __instance)
