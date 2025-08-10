@@ -19,6 +19,7 @@ namespace SFServer
 
         public ClientInfo[] GetClients() => (ClientInfo[])_clients.Clone();
         public IEnumerable<ClientInfo> AllClients => _clients;
+        public ClientInfo[] Clients => _clients;
 
         public ClientManager(int numClients)
         {
