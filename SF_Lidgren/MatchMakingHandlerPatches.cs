@@ -23,12 +23,41 @@ public static class MatchMakingHandlerPatches
 
     public static void AwakeMethodPostfix(MatchmakingHandler __instance)
     {
-        Debug.Log("Creating join server GUI...");
-        __instance.gameObject.AddComponent<TempGUI>();
+        try
+        {
+            Debug.Log("Creating join server GUI...");
+            var tempGUI = __instance.gameObject.AddComponent<TempGUI>();
+            if (tempGUI != null)
+            {
+                Debug.Log("TempGUI component added successfully!");
+            }
+            else
+            {
+                Debug.LogError("Failed to add TempGUI component!");
+            }
 
-        Debug.Log("Adding MMHSockets...");
-        if (!Object.FindObjectOfType<MatchMakingHandlerSockets>())
-            __instance.gameObject.AddComponent<MatchMakingHandlerSockets>();
+            Debug.Log("Adding MMHSockets...");
+            if (!Object.FindObjectOfType<MatchMakingHandlerSockets>())
+            {
+                var sockets = __instance.gameObject.AddComponent<MatchMakingHandlerSockets>();
+                if (sockets != null)
+                {
+                    Debug.Log("MatchMakingHandlerSockets component added successfully!");
+                }
+                else
+                {
+                    Debug.LogError("Failed to add MatchMakingHandlerSockets component!");
+                }
+            }
+            else
+            {
+                Debug.Log("MatchMakingHandlerSockets already exists, skipping.");
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Error in AwakeMethodPostfix: {ex.Message}\nStackTrace: {ex.StackTrace}");
+        }
     }
 
     public static bool GetIsInsideLobbyMethodPrefix(ref bool __result) // Patch to accurately reflect info for socket connections
