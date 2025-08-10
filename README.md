@@ -33,6 +33,7 @@ This project provides:
      "HostSteamId": 0,
      "MaxPlayers": 4,
      "EnableLogging": true,
+     "EnableDebugPacketLogging": false,
      "LogPath": "debug_log.txt",
      "AuthDelayMs": 1000,
      "EnableConsoleOutput": true
