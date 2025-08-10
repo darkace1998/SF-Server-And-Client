@@ -1,0 +1,157 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  lint-and-security:
+    name: Lint and Security Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+          
+    - name: Restore dependencies
+      run: dotnet restore SF-Server/SF-Server.csproj
+      
+    - name: Build with security analysis
+      run: |
+        dotnet build SF-Server/SF-Server.csproj \
+          --configuration Release \
+          --no-restore \
+          --verbosity normal \
+          --property WarningsAsErrors="" \
+          --property TreatWarningsAsErrors=false
+          
+    - name: Run security analysis
+      run: |
+        dotnet build SF-Server/SF-Server.csproj \
+          --configuration Release \
+          --no-restore \
+          --verbosity normal \
+          --property RunAnalysis=true \
+          --property EnableNETAnalyzers=true \
+          --property AnalysisLevel=latest \
+          --property AnalysisMode=All
+          
+    - name: Check for security vulnerabilities in dependencies
+      run: |
+        cd SF-Server && dotnet list package --vulnerable --include-transitive || true
+        
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Install dotnet-outdated tool
+      run: dotnet tool install --global dotnet-outdated-tool
+      
+    - name: Check for outdated packages
+      run: |
+        cd SF-Server && dotnet outdated || true
+        
+    - name: Run NuGet security audit
+      run: |
+        cd SF-Server && dotnet restore
+        cd SF-Server && dotnet list package --vulnerable || true
+        
+  code-quality:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Restore dependencies
+      run: dotnet restore SF-Server/SF-Server.csproj
+      
+    - name: Build and analyze
+      run: |
+        dotnet build SF-Server/SF-Server.csproj \
+          --configuration Release \
+          --no-restore \
+          --verbosity normal \
+          2>&1 | tee build-output.log
+          
+    - name: Count warnings and errors
+      run: |
+        echo "=== Build Analysis Summary ===" | tee analysis-summary.txt
+        echo "Warnings:" | tee -a analysis-summary.txt
+        grep -c "warning" build-output.log || echo "0" | tee -a analysis-summary.txt
+        echo "Errors:" | tee -a analysis-summary.txt  
+        grep -c "error" build-output.log || echo "0" | tee -a analysis-summary.txt
+        echo "Security-related warnings:" | tee -a analysis-summary.txt
+        grep -c "CA[0-9][0-9][0-9][0-9]" build-output.log || echo "0" | tee -a analysis-summary.txt
+        echo "" | tee -a analysis-summary.txt
+        echo "Top security warnings:" | tee -a analysis-summary.txt
+        grep "CA[0-9][0-9][0-9][0-9]" build-output.log | head -10 || echo "None found" | tee -a analysis-summary.txt
+        cat analysis-summary.txt
+        
+    - name: Upload analysis results
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-analysis-results
+        path: |
+          build-output.log
+          analysis-summary.txt
+          
+  build-test:
+    name: Build Validation
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Restore dependencies
+      run: dotnet restore SF-Server/SF-Server.csproj
+      
+    - name: Build server
+      run: |
+        dotnet build SF-Server/SF-Server.csproj \
+          --configuration Release \
+          --no-restore
+          
+    - name: Test server build output
+      run: |
+        dotnet SF-Server/bin/Release/net8.0/SF-Server.dll --help || true

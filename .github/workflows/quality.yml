@@ -1,0 +1,158 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Linting and Code Style
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Install format tool
+      run: dotnet tool install -g dotnet-format
+      
+    - name: Restore dependencies
+      run: dotnet restore SF-Server/SF-Server.csproj
+      
+    - name: Check code formatting
+      run: |
+        echo "🎨 Checking code formatting..."
+        dotnet format SF-Server/SF-Server.csproj --verify-no-changes --verbosity minimal 2>&1 | tee format-check.txt || {
+          echo "⚠️ Code formatting issues found. See format-check.txt for details."
+          echo "Run 'dotnet format' to automatically fix formatting issues."
+          echo "This is informational and won't fail the build."
+        }
+        echo "✅ Code formatting check completed"
+        
+    - name: Run linting analysis
+      run: |
+        echo "=== Linting Report ===" | tee lint-report.txt
+        echo "Generated: $(date)" | tee -a lint-report.txt
+        echo "" | tee -a lint-report.txt
+        
+        # Build with focus on style and design warnings
+        dotnet build SF-Server/SF-Server.csproj \
+          --configuration Release \
+          --no-restore \
+          --verbosity normal \
+          2>&1 | tee build-lint.log
+          
+        # Categorize warnings
+        echo "📋 Warning Categories:" | tee -a lint-report.txt
+        echo "Documentation (CS1591): $(grep -c 'CS1591' build-lint.log || echo 0)" | tee -a lint-report.txt
+        echo "Design (CA1xxx): $(grep -c 'CA1[0-9][0-9][0-9]' build-lint.log || echo 0)" | tee -a lint-report.txt
+        echo "Performance (CA18xx): $(grep -c 'CA18[0-9][0-9]' build-lint.log || echo 0)" | tee -a lint-report.txt
+        echo "Security (CA5xxx): $(grep -c 'CA5[0-9][0-9][0-9]' build-lint.log || echo 0)" | tee -a lint-report.txt
+        echo "SonarQube (Sxxxx): $(grep -c 'S[0-9][0-9][0-9][0-9]' build-lint.log || echo 0)" | tee -a lint-report.txt
+        echo "" | tee -a lint-report.txt
+        
+        # Top design issues
+        echo "🔧 Top Design Issues (should be addressed):" | tee -a lint-report.txt
+        grep -E "(CA1062|CA1031|CA1822|CA1724)" build-lint.log | head -10 || echo "None found" | tee -a lint-report.txt
+        
+    - name: Upload lint report
+      uses: actions/upload-artifact@v4
+      with:
+        name: lint-report
+        path: |
+          lint-report.txt
+          build-lint.log
+
+  complexity:
+    name: Code Complexity Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Restore dependencies
+      run: dotnet restore SF-Server/SF-Server.csproj
+      
+    - name: Analyze code complexity
+      run: |
+        echo "=== Code Complexity Report ===" | tee complexity-report.txt
+        echo "Generated: $(date)" | tee -a complexity-report.txt
+        echo "" | tee -a complexity-report.txt
+        
+        echo "📁 Source Files Analysis:" | tee -a complexity-report.txt
+        find SF-Server -name "*.cs" -exec wc -l {} + | sort -nr | head -10 | tee -a complexity-report.txt
+        echo "" | tee -a complexity-report.txt
+        
+        echo "🔍 Method Complexity (searching for long methods):" | tee -a complexity-report.txt
+        # Look for methods with many lines (potential complexity)
+        grep -n -A 50 "public\|private\|protected" SF-Server/*.cs | grep -B 1 -A 1 "^\s*}" | head -20 | tee -a complexity-report.txt
+        
+    - name: Check for code duplication
+      run: |
+        echo "" | tee -a complexity-report.txt
+        echo "🔄 Potential Code Duplication:" | tee -a complexity-report.txt
+        
+        # Simple duplication check - look for similar method signatures
+        grep -h "public\|private\|protected" SF-Server/*.cs | sort | uniq -c | sort -nr | head -10 | tee -a complexity-report.txt
+        
+    - name: Upload complexity report
+      uses: actions/upload-artifact@v4
+      with:
+        name: complexity-report
+        path: complexity-report.txt
+
+  documentation:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Check documentation coverage
+      run: |
+        echo "=== Documentation Coverage Report ===" | tee doc-report.txt
+        echo "Generated: $(date)" | tee -a doc-report.txt
+        echo "" | tee -a doc-report.txt
+        
+        # Count public APIs
+        echo "📚 Public API Documentation:" | tee -a doc-report.txt
+        echo "Public classes: $(grep -c 'public class' SF-Server/*.cs)" | tee -a doc-report.txt
+        echo "Public methods: $(grep -c 'public.*(' SF-Server/*.cs)" | tee -a doc-report.txt
+        echo "Public properties: $(grep -c 'public.*{' SF-Server/*.cs)" | tee -a doc-report.txt
+        echo "" | tee -a doc-report.txt
+        
+        # Check for XML documentation
+        echo "📖 XML Documentation Status:" | tee -a doc-report.txt
+        echo "Classes with XML docs: $(grep -c '/// <summary>' SF-Server/*.cs)" | tee -a doc-report.txt
+        echo "Missing documentation warnings:" | tee -a doc-report.txt
+        grep "CS1591" build-lint.log | wc -l | tee -a doc-report.txt
+        
+    - name: Check README and docs
+      run: |
+        echo "" | tee -a doc-report.txt
+        echo "📋 Project Documentation Files:" | tee -a doc-report.txt
+        ls -la *.md | tee -a doc-report.txt
+        echo "" | tee -a doc-report.txt
+        echo "README.md exists: $(test -f README.md && echo 'Yes' || echo 'No')" | tee -a doc-report.txt
+        echo "Security documentation: $(test -f SECURITY_ANALYSIS.md && echo 'Yes' || echo 'No')" | tee -a doc-report.txt
+        
+    - name: Upload documentation report
+      uses: actions/upload-artifact@v4
+      with:
+        name: documentation-report
+        path: doc-report.txt
