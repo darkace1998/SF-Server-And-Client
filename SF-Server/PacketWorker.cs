@@ -7,7 +7,7 @@ public class PacketWorker
     private readonly Server _server;
     private readonly SfPacketType[] _ignoredPacketTypes =
     {
-		//SfPacketType.PlayerUpdate,
+		SfPacketType.PlayerUpdate, // Very frequent packets, usually not needed for debugging
 	};
 
     public PacketWorker(Server server) => _server = server;
@@ -19,7 +19,7 @@ public class PacketWorker
         var msgType = (SfPacketType)msg.ReadByte();
         var msgChannel = msg.SequenceChannel;
 
-        if (!_ignoredPacketTypes.Contains(msgType))
+        if (!_ignoredPacketTypes.Contains(msgType) && _server.Config.EnableLogging && _server.Config.EnableDebugPacketLogging)
         {
             var packetDebugInfo = $"""
 	                               

@@ -4,6 +4,7 @@
   "HostSteamId": 76561198000000000,
   "MaxPlayers": 4,
   "EnableLogging": true,
+  "EnableDebugPacketLogging": false,
   "LogPath": "debug_log.txt",
   "AuthDelayMs": 1000,
   "EnableConsoleOutput": true
