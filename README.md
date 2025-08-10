@@ -86,10 +86,29 @@ dotnet restore
 dotnet build
 ```
 
-#### Full Solution (requires game dependencies)
+#### Client Only
 ```bash
-# Note: Client project requires game assemblies and BepInEx packages
+cd SF_Lidgren
+dotnet restore
+dotnet build
+```
+
+#### Full Solution (Recommended)
+```bash
+# Both server and client projects build successfully
 dotnet build SF-Server.sln
+
+# Or use the provided build script
+./build-debug.sh all
+```
+
+#### Quick Development Build
+```bash
+# Use the provided build script for easier development
+./build-debug.sh          # Build everything
+./build-debug.sh server    # Build only server
+./build-debug.sh client    # Build only client
+./build-debug.sh run-server-debug  # Start server with debug credentials
 ```
 
 ### Project Structure
@@ -157,7 +176,27 @@ SF-Server-And-Client/
 ### Client Requirements
 - Stick Fight: The Game
 - BepInEx 5.x
-- Game assemblies for building (see setup guide)
+- Game assemblies (✅ **Already included** in SF_Lidgren directory)
+
+## 🛠 Development & Debugging
+
+### Quick Development Setup
+1. **Clone and Build**: `git clone <repo> && cd SF-Server-And-Client && ./build-debug.sh`
+2. **Debug Server**: `./build-debug.sh run-server-debug` (uses dummy credentials)
+3. **Build Client**: Client DLL automatically built to `SF_Lidgren/bin/Debug/net35/SF_Lidgren.dll`
+
+### IDE Support
+- **Visual Studio Code**: Pre-configured launch and task configurations in `.vscode/`
+- **Debugging**: Set breakpoints and debug server directly in IDE
+- **Build Tasks**: Use Ctrl+Shift+P → "Tasks: Run Task" → "build-all"
+
+### Development Workflow
+1. Make changes to server/client code
+2. Build with `./build-debug.sh` or IDE
+3. For server: Run with debugger or `run-server-debug`
+4. For client: Copy DLL to game's `BepInEx/plugins/` and test in-game
+
+See [DEV_SETUP.md](DEV_SETUP.md) for detailed development instructions.
 
 ## 🔒 Security Notes
 
