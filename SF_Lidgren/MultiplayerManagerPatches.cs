@@ -4,6 +4,7 @@ using System.Reflection;
 using HarmonyLib;
 using Lidgren.Network;
 using Steamworks;
+using UnityEngine;
 
 namespace SF_Lidgren;
 
@@ -126,22 +127,53 @@ public class MultiplayerManagerPatches
     {
         if (!MatchmakingHandler.RunningOnSockets) return true;
 
-        var unreadyAllPlayersMethod = AccessTools.Method(typeof(MultiplayerManager), "UnReadyAllPlayers");
-        unreadyAllPlayersMethod.Invoke(__instance, null);
-
-        var array = new byte[2 + nextLevel.MapData.Length];
-        using (var memoryStream = new MemoryStream(array))
+        try
         {
-            using (var binaryWriter = new BinaryWriter(memoryStream))
+            // Validate map data before processing
+            if (nextLevel.MapData == null || nextLevel.MapData.Length == 0)
             {
-                binaryWriter.Write(indexOfWinner);
-                binaryWriter.Write(nextLevel.MapType);
-                binaryWriter.Write(nextLevel.MapData);
+                Debug.LogWarning("Invalid map data detected, using fallback");
+                nextLevel.MapData = new byte[] { 0, 0, 0, 0 }; // Fallback to lobby map
+                nextLevel.MapType = 0; // Lobby type
+            }
+
+            var unreadyAllPlayersMethod = AccessTools.Method(typeof(MultiplayerManager), "UnReadyAllPlayers");
+            unreadyAllPlayersMethod.Invoke(__instance, null);
+
+            var array = new byte[2 + nextLevel.MapData.Length];
+            using (var memoryStream = new MemoryStream(array))
+            {
+                using (var binaryWriter = new BinaryWriter(memoryStream))
+                {
+                    binaryWriter.Write(indexOfWinner);
+                    binaryWriter.Write(nextLevel.MapType);
+                    binaryWriter.Write(nextLevel.MapData);
+                }
+            }
+
+            Debug.Log($"Sending map change - MapType: {nextLevel.MapType}, DataLength: {nextLevel.MapData.Length}, Winner: {indexOfWinner}");
+            NetworkUtils.SendPacketToServer(array, P2PPackageHandler.MsgType.MapChange, NetDeliveryMethod.ReliableOrdered,
+                __instance.LocalPlayerIndex);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Error in ChangeMapMethodPrefix: {ex.Message}");
+            Debug.LogError($"Stack trace: {ex.StackTrace}");
+            
+            // Try to send a fallback map change
+            try
+            {
+                Debug.Log("Attempting fallback map change...");
+                var fallbackArray = new byte[] { indexOfWinner, 0, 0, 0, 0, 0 }; // Lobby map fallback
+                NetworkUtils.SendPacketToServer(fallbackArray, P2PPackageHandler.MsgType.MapChange, NetDeliveryMethod.ReliableOrdered,
+                    __instance.LocalPlayerIndex);
+            }
+            catch (System.Exception fallbackEx)
+            {
+                Debug.LogError($"Fallback map change also failed: {fallbackEx.Message}");
             }
         }
-
-        NetworkUtils.SendPacketToServer(array, P2PPackageHandler.MsgType.MapChange, NetDeliveryMethod.ReliableOrdered,
-            __instance.LocalPlayerIndex);
+        
         return true;
     }
 
