@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using HarmonyLib;
 using Lidgren.Network;
 using Steamworks;
@@ -82,13 +83,22 @@ public class MultiplayerManagerPatches
         ___mConnectedClients = new ConnectedClientData[4]; // Client list appears to be empty otherwise
     }
 
-    public static void OnInitFromServerMethodPostfix(ref bool ___m_IsServer, MultiplayerManager __instance)
+    public static void OnInitFromServerMethodPostfix(MultiplayerManager __instance)
     {
         if (!MatchmakingHandler.RunningOnSockets) return;
 
         // TODO: Change this to be IP based and server-side later
         if (__instance.LocalPlayerIndex == 0)
-            ___m_IsServer = true;
+        {
+            // Use reflection to set the static IsServer property since direct field injection failed
+            AccessTools.Property(typeof(MultiplayerManager), "IsServer")
+                .SetValue(null, // obj instance is null because property is static
+                    true,
+                    BindingFlags.Default,
+                    null,
+                    null,
+                    null);
+        }
     }
 
     // TODO: Implement this properly instead of ignoring it
