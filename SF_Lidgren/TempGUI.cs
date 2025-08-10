@@ -21,72 +21,139 @@ public class TempGUI : MonoBehaviour
     private GUIStyle _headerStyle;
     private GUIStyle _buttonStyle;
     private GUIStyle _statusStyle;
+    private bool _stylesInitialized = false;
 
     private void Start()
     {
         Debug.Log("Started SF_Lidgren GUI Manager!");
-        InitializeStyles();
     }
 
     private void InitializeStyles()
     {
-        _headerStyle = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = 16,
-            fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
-        };
+        if (_stylesInitialized || GUI.skin == null)
+            return;
 
-        _buttonStyle = new GUIStyle(GUI.skin.button)
+        try
         {
-            fontSize = 12,
-            fontStyle = FontStyle.Bold
-        };
+            _headerStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 16,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
 
-        _statusStyle = new GUIStyle(GUI.skin.label)
+            _buttonStyle = new GUIStyle(GUI.skin.button)
+            {
+                fontSize = 12,
+                fontStyle = FontStyle.Bold
+            };
+
+            _statusStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 11,
+                wordWrap = true
+            };
+
+            _stylesInitialized = true;
+            Debug.Log("SF_Lidgren GUI styles initialized successfully!");
+        }
+        catch (System.Exception ex)
         {
-            fontSize = 11,
-            wordWrap = true
-        };
+            Debug.LogError($"Failed to initialize SF_Lidgren GUI styles: {ex.Message}");
+        }
     }
 
     private void Update()
     {
-        // Toggle menu with F1 key
-        if (Input.GetKeyDown(KeyCode.F1))
+        try
         {
-            _showMenu = !_showMenu;
-        }
+            // Toggle menu with F1 key
+            if (Input.GetKeyDown(KeyCode.F1))
+            {
+                _showMenu = !_showMenu;
+                Debug.Log($"SF_Lidgren menu toggled: {_showMenu}");
+            }
 
-        // Show menu by default on first load
-        if (!_showMenu && Time.time < 5f)
+            // Show menu by default on first load
+            if (!_showMenu && Time.time < 5f)
+            {
+                _showMenu = true;
+            }
+        }
+        catch (System.Exception ex)
         {
-            _showMenu = true;
+            Debug.LogError($"SF_Lidgren Update error: {ex.Message}");
         }
     }
 
     public void OnGUI()
     {
-        if (!_showMenu)
+        try
         {
-            // Show minimal toggle hint
-            GUI.Label(new Rect(10, 10, 200, 20), "Press F1 to open server menu");
-            return;
-        }
+            // Initialize styles on first GUI call when GUI.skin is available
+            if (!_stylesInitialized)
+            {
+                InitializeStyles();
+            }
 
-        _menuRect = GUILayout.Window(1169, _menuRect, DrawServerWindow, "SF Dedicated Server Client");
+            if (!_showMenu)
+            {
+                // Show minimal toggle hint
+                GUI.Label(new Rect(10, 10, 200, 20), "Press F1 to open server menu");
+                return;
+            }
+
+            _menuRect = GUILayout.Window(1169, _menuRect, DrawServerWindow, "SF Dedicated Server Client");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"SF_Lidgren OnGUI error: {ex.Message}");
+            
+            // Fallback minimal GUI in case of errors
+            if (_showMenu)
+            {
+                GUI.Window(1169, new Rect(Screen.width / 2f - 150f, Screen.height / 2f - 100f, 300f, 200f), (int windowId) =>
+                {
+                    GUILayout.BeginVertical();
+                    GUILayout.Label("SF Dedicated Server (Error Recovery Mode)");
+                    GUILayout.Space(10);
+                    
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label("Address:");
+                    Address = GUILayout.TextField(Address ?? "localhost");
+                    GUILayout.EndHorizontal();
+                    
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label("Port:");
+                    var portString = GUILayout.TextField(Port.ToString());
+                    if (int.TryParse(portString, out var newPort)) Port = newPort;
+                    GUILayout.EndHorizontal();
+                    
+                    if (GUILayout.Button("Connect")) ConnectToServer();
+                    if (GUILayout.Button("Disconnect")) DisconnectFromServer();
+                    if (GUILayout.Button("Hide (F1)")) _showMenu = false;
+                    
+                    GUILayout.EndVertical();
+                }, "SF Server Client");
+            }
+        }
     }
 
     private void DrawServerWindow(int windowId)
     {
         GUILayout.BeginVertical();
 
+        // Use fallback styles if initialization failed
+        var headerStyle = _headerStyle ?? GUI.skin.label;
+        var buttonStyle = _buttonStyle ?? GUI.skin.button;
+        var statusStyle = _statusStyle ?? GUI.skin.label;
+
         // Header
-        GUILayout.Label("Stick Fight Dedicated Server", _headerStyle);
+        GUILayout.Label("Stick Fight Dedicated Server", headerStyle);
         GUILayout.Space(10);
 
         // Connection Section
-        GUILayout.Label("Server Connection:", _headerStyle);
+        GUILayout.Label("Server Connection:", headerStyle);
         GUILayout.BeginHorizontal();
         GUILayout.Label("Address:", GUILayout.Width(60));
         Address = GUILayout.TextField(Address, GUILayout.ExpandWidth(true));
@@ -110,13 +177,13 @@ public class TempGUI : MonoBehaviour
         var isConnected = connectionStatus.Contains("Connected");
 
         GUI.enabled = !isConnected;
-        if (GUILayout.Button("Connect", _buttonStyle, GUILayout.Height(30)))
+        if (GUILayout.Button("Connect", buttonStyle, GUILayout.Height(30)))
         {
             ConnectToServer();
         }
 
         GUI.enabled = isConnected;
-        if (GUILayout.Button("Disconnect", _buttonStyle, GUILayout.Height(30)))
+        if (GUILayout.Button("Disconnect", buttonStyle, GUILayout.Height(30)))
         {
             DisconnectFromServer();
         }
@@ -127,13 +194,34 @@ public class TempGUI : MonoBehaviour
         GUILayout.Space(10);
 
         // Status Section
-        GUILayout.Label("Status:", _headerStyle);
-        _statusStyle.normal.textColor = _statusColor;
-        GUILayout.Label(connectionStatus, _statusStyle);
+        GUILayout.Label("Status:", headerStyle);
+        
+        // Apply status color if possible
+        if (statusStyle != null)
+        {
+            var oldColor = statusStyle.normal.textColor;
+            statusStyle.normal.textColor = _statusColor;
+            GUILayout.Label(connectionStatus, statusStyle);
+            statusStyle.normal.textColor = oldColor;
+        }
+        else
+        {
+            GUILayout.Label(connectionStatus);
+        }
 
         if (!string.IsNullOrEmpty(_statusMessage))
         {
-            GUILayout.Label(_statusMessage, _statusStyle);
+            if (statusStyle != null)
+            {
+                var oldColor = statusStyle.normal.textColor;
+                statusStyle.normal.textColor = _statusColor;
+                GUILayout.Label(_statusMessage, statusStyle);
+                statusStyle.normal.textColor = oldColor;
+            }
+            else
+            {
+                GUILayout.Label(_statusMessage);
+            }
         }
 
         GUILayout.Space(10);
