@@ -354,7 +354,7 @@ public class Server : IDisposable
     /// <summary>
     /// Get current time in milliseconds for packet timing
     /// </summary>
-    private static uint GetCurrentTime() => (uint)(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() & 0xFFFFFFFF);
+    private static uint GetCurrentTime() => (uint)(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() & uint.MaxValue);
 
     /// <summary>
     /// Checks if a packet timestamp is obsolete based on the last processed timestamp
