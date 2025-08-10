@@ -16,6 +16,11 @@ public class ServerConfig
     public string LogPath { get; set; } = "debug_log.txt";
     public int AuthDelayMs { get; set; } = 1000;
     public bool EnableConsoleOutput { get; set; } = true;
+    
+    /// <summary>
+    /// Network game options for server configuration
+    /// </summary>
+    public NetworkOptions GameOptions { get; set; } = NetworkOptions.Default;
 
     /// <summary>
     /// Load configuration from a JSON file
@@ -178,6 +183,7 @@ public class ServerConfig
                     LogPath = configFromFile.LogPath;
                     AuthDelayMs = configFromFile.AuthDelayMs;
                     EnableConsoleOutput = configFromFile.EnableConsoleOutput;
+                    GameOptions = configFromFile.GameOptions;
                     // Don't override credentials from config file for security
                     Console.WriteLine($"Configuration loaded from: {args[i + 1]}");
                     break;

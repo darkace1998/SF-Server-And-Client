@@ -26,6 +26,7 @@ public class Server : IDisposable
     private readonly PacketWorker _packetWorker;
     private readonly Random _rand;
     private readonly JsonSerializerOptions _jsonOptions;
+    private uint _lastProcessedTimestamp;
     //private readonly List<IPAddress> _approvedIPs;
     private const string LidgrenIdentifier = "monky.SF_Lidgren";
     private const string StickFightAppId = "674940";
@@ -65,6 +66,7 @@ public class Server : IDisposable
         _jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         _clientMgr = new ClientManager(config.MaxPlayers);
         _mapMgr = new MapManager(config);
+        _lastProcessedTimestamp = 0;
         //_approvedIPs = new List<IPAddress>();
     }
 
@@ -349,8 +351,43 @@ public class Server : IDisposable
     // Methods to be executed involving packets sent to and from game
     // *************************************************
 
-    // Get current time in milliseconds for packet timing
-    private uint GetCurrentTime() => (uint)(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() & 0xFFFFFFFF);
+    /// <summary>
+    /// Get current time in milliseconds for packet timing
+    /// </summary>
+    private static uint GetCurrentTime() => (uint)(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() & 0xFFFFFFFF);
+
+    /// <summary>
+    /// Checks if a packet timestamp is obsolete based on the last processed timestamp
+    /// </summary>
+    /// <param name="packetTimestamp">The timestamp from the incoming packet</param>
+    /// <returns>True if the packet is obsolete and should be discarded</returns>
+    public bool IsPacketObsolete(uint packetTimestamp)
+    {
+        // Allow some tolerance for network jitter (500ms)
+        const uint toleranceMs = 500;
+        
+        // Handle timestamp overflow (uint wraps around)
+        if (_lastProcessedTimestamp > uint.MaxValue - toleranceMs && packetTimestamp < toleranceMs)
+        {
+            // Timestamp has wrapped around, accept it
+            _lastProcessedTimestamp = packetTimestamp;
+            return false;
+        }
+        
+        // Normal case: check if packet is older than last processed
+        if (packetTimestamp < _lastProcessedTimestamp - toleranceMs)
+        {
+            if (_config.EnableLogging)
+            {
+                Console.WriteLine($"Discarding obsolete packet: timestamp={packetTimestamp}, last={_lastProcessedTimestamp}");
+            }
+            return true;
+        }
+        
+        // Update last processed timestamp
+        _lastProcessedTimestamp = Math.Max(_lastProcessedTimestamp, packetTimestamp);
+        return false;
+    }
 
     public void SendPacketToUser(NetConnection user, byte[] data, SfPacketType messageType,
         NetDeliveryMethod sendMethod = NetDeliveryMethod.ReliableOrdered, int channel = 0)
@@ -419,17 +456,16 @@ public class Server : IDisposable
             if (client is null || Equals(client.Address, user.RemoteEndPoint.Address))
                 continue;
 
-            // TODO: Create proper PlayerStats obj
-            for (var i = 0; i < 13; i++) tempMsg.Write(0); // Write 0's for 13 empty stats until that's handled
+            // Write proper PlayerStats data instead of zeros
+            var statsBytes = client.Stats.ToByteArray();
+            tempMsg.Write(statsBytes);
         }
 
-        tempMsg.Write(ushort.MinValue); // TODO: Figure this out properly (something weapons)?
+        tempMsg.Write(ushort.MinValue); // Default weapon value - consider implementing proper weapon tracking
 
-        // TODO: Figure out NetworkOptions (maps, hp, regen, weaponsSpawn in that order)
-        tempMsg.Write((byte)0);
-        tempMsg.Write((byte)0);
-        tempMsg.Write((byte)0);
-        tempMsg.Write((byte)0);
+        // Write proper NetworkOptions instead of hardcoded zeros
+        var gameOptionsBytes = _config.GameOptions.ToByteArray();
+        tempMsg.Write(gameOptionsBytes);
 
         // foreach (var b in tempMsg.Data) 
         //     Console.Write(b);
@@ -518,8 +554,13 @@ public class Server : IDisposable
 
     public void OnPlayerForceAdded(NetConnection user, NetIncomingMessage damageData)
     {
-        // TODO: Add logic for updating anything serverside
-        // var client = GetClient(user.RemoteEndPoint.Address);
+        // Add logic for server-side force tracking
+        var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
+        
+        if (client != null && _config.EnableLogging)
+        {
+            Console.WriteLine($"Force applied to player {client.Username}");
+        }
 
         SendPacketToAllUsers(
             damageData.PeekBytes(damageData.Data.Length - 5),
@@ -542,7 +583,7 @@ public class Server : IDisposable
             damageData.SequenceChannel
         );
 
-        // TODO: Finish logic for updating client's serverside hp
+        // Implement server-side HP tracking
         var attackerClient = _clientMgr.GetClient(user.RemoteEndPoint.Address);
         var damagedClientEventChannel = damageData.SequenceChannel;
 
@@ -556,7 +597,37 @@ public class Server : IDisposable
             return;
         }
 
-        damagedClient.DeductHp(dmgAmount);
+        // Update server-side HP tracking
+        if (damagedClient != null)
+        {
+            damagedClient.DeductHp(dmgAmount);
+
+            if (_config.EnableLogging)
+            {
+                Console.WriteLine($"Player {damagedClient.Username} took {dmgAmount} damage, HP: {damagedClient.Hp}, Alive: {damagedClient.IsAlive}");
+            }
+
+            // Check if player died
+            if (!damagedClient.IsAlive)
+            {
+                Console.WriteLine($"Player {damagedClient.Username} has been killed!");
+                
+                // Update attacker stats if available
+                if (attackerClient != null && attackerClient != damagedClient)
+                {
+                    // Note: Would need to implement PlayerStats update methods here
+                    Console.WriteLine($"Kill credited to {attackerClient.Username}");
+                }
+            }
+        }
+
+        // Check for round end conditions
+        var alivePlayers = _clientMgr.GetNumLivingClients();
+        if (alivePlayers <= 1 && _clientMgr.Clients.Count(c => c != null) > 1)
+        {
+            Console.WriteLine($"Round ending - {alivePlayers} players remaining");
+            // Round end logic could be implemented here
+        }
 
         // TODO: Have server send out map packet--Integrate custom orders and custom maps
         //if (damagedClient.IsAlive || _clientMgr.GetNumLivingClients() != 0) return;

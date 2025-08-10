@@ -71,8 +71,28 @@ public class NetworkPlayerPatches
         var timeSent = posMsg.ReadUInt32();
         var msgType = (P2PPackageHandler.MsgType)posMsg.ReadByte();
 
-        // if (timeSent < MultiplayerManager.LastTimeStamp) // TODO: Implement logic for timeSent?
-        //     Debug.LogWarning("Packet Is obsolete, throwing away! Of TYPE: " + msgType);
+        // Implement logic for timeSent validation
+        var currentTime = (uint)((DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds);
+        const uint maxPacketAge = 5000; // 5 seconds max age
+        
+        // Check if packet is too old (with overflow handling)
+        uint timeDifference;
+        if (currentTime >= timeSent)
+        {
+            timeDifference = currentTime - timeSent;
+        }
+        else
+        {
+            // Handle timestamp overflow
+            timeDifference = (uint.MaxValue - timeSent) + currentTime + 1;
+        }
+        
+        if (timeDifference > maxPacketAge)
+        {
+            Debug.LogWarning($"Packet is obsolete, discarding! Type: {msgType}, Age: {timeDifference}ms");
+            NetworkUtils.LidgrenData.LocalClient.Recycle(posMsg);
+            return false;
+        }
 
         if (msgType != P2PPackageHandler.MsgType.PlayerUpdate)
         {

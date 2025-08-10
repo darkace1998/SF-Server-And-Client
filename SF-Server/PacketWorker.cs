@@ -44,10 +44,16 @@ public class PacketWorker
         //  }
         // }
 
-        // TODO: Add logic for timeSent
-        //if (num < lastTimeStamp) Console.WriteLine("Packet is obsolete!");
-        //var data = msg.ReadBytes(msg.Data.Length - 6); // Count timeSent, msgType, and 1 for offset byte
-        //Console.WriteLine("Data length: " + msg.Data.Length);
+        // Check if packet is obsolete based on timestamp
+        if (_server.IsPacketObsolete(timeSent))
+        {
+            if (_server.Config.EnableLogging)
+            {
+                Console.WriteLine($"Discarding obsolete packet of type: {msgType}");
+            }
+            return; // Don't process obsolete packets
+        }
+        
         ExecutePacketData(msg, msgType, msg.SenderConnection);
     }
 

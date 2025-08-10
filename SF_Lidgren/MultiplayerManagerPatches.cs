@@ -102,13 +102,42 @@ public class MultiplayerManagerPatches
         }
     }
 
-    // TODO: Implement this properly instead of ignoring it
+    // Implement proper disconnected player checking
     public static bool CheckForDisconnectedPlayersMethodPrefix()
     {
         if (!MatchmakingHandler.RunningOnSockets) return true;
-        //NetworkUtils.LidgrenData.LocalClient.
-        return false;
-
+        
+        // Check connection status of the Lidgren client
+        if (NetworkUtils.LidgrenData?.LocalClient != null)
+        {
+            var client = NetworkUtils.LidgrenData.LocalClient;
+            
+            // Check if we're still connected to the server
+            if (NetworkUtils.LidgrenData.ServerConnection?.Status != NetConnectionStatus.Connected)
+            {
+                Console.WriteLine("Detected disconnection from server");
+                
+                // Trigger disconnection handling
+                var multiplayerManager = GameManager.Instance?.mMultiplayerManager;
+                if (multiplayerManager != null)
+                {
+                    Debug.Log("Triggering multiplayer manager disconnection handling");
+                    multiplayerManager.OnDisconnected();
+                }
+                
+                return false; // Prevent original method execution
+            }
+            
+            // Check for network timeouts or issues
+            // Note: Using a simplified timeout approach since LastReceiveTime is not available in this Lidgren version
+            if (NetworkUtils.LidgrenData.ServerConnection.Statistics.ReceivedMessages == 0)
+            {
+                Console.WriteLine("No messages received from server");
+                return false;
+            }
+        }
+        
+        return false; // Always handle disconnection checking ourselves
     }
 
     public static void OnPlayerSpawnedMethodPrefix(ref byte[] data)

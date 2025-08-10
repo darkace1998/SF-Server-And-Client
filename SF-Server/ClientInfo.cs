@@ -65,6 +65,11 @@ public sealed class ClientInfo : IEquatable<ClientInfo>
     public AuthTicket AuthTicket { get; }
 
     /// <summary>
+    /// Gets or sets the player statistics.
+    /// </summary>
+    public PlayerStats Stats { get; set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ClientInfo"/> class.
     /// </summary>
     /// <param name="steamID">The SteamID of the client.</param>
@@ -83,6 +88,7 @@ public sealed class ClientInfo : IEquatable<ClientInfo>
         Hp = 100;
         IsAlive = true;
         PositionInfo = new PositionPackage();
+        Stats = PlayerStats.Default;
     }
 
     /// <summary>
