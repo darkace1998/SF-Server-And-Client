@@ -12,6 +12,7 @@ public class ServerConfig
     public ulong HostSteamId { get; set; } = 0;
     public int MaxPlayers { get; set; } = 4;
     public bool EnableLogging { get; set; } = true;
+    public bool EnableDebugPacketLogging { get; set; } = false;
     public string LogPath { get; set; } = "debug_log.txt";
     public int AuthDelayMs { get; set; } = 1000;
     public bool EnableConsoleOutput { get; set; } = true;

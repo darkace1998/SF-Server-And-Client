@@ -14,6 +14,7 @@ public class Server : IDisposable
     private const int MaxPacketSize = 1024;
 
     public string ServerLogPath { get; }
+    public ServerConfig Config => _config;
 
     private readonly NetServer _masterServer;
     private readonly ClientManager _clientMgr;
