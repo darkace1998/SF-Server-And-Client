@@ -72,7 +72,7 @@ public class NetworkPlayerPatches
         var msgType = (P2PPackageHandler.MsgType)posMsg.ReadByte();
 
         // Implement logic for timeSent validation
-        var currentTime = (uint)((DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds);
+        var currentTime = (uint)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         const uint maxPacketAge = 5000; // 5 seconds max age
         
         // Check if packet is too old (with overflow handling)
