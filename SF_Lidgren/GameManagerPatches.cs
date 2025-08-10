@@ -51,8 +51,34 @@ public static class GameManagerPatches
                 {
                     try
                     {
-                        // TODO: Fix this from break sometimes
-                        var nextLevel = ___levelSelector.GetNextLevel();
+                        // Improved error handling for level selection that sometimes breaks
+                        MapWrapper nextLevel;
+                        
+                        // Add safety checks before calling GetNextLevel
+                        if (___levelSelector == null)
+                        {
+                            Debug.LogWarning("Level selector is null, using fallback level");
+                            nextLevel = new MapWrapper { MapType = 0, MapData = new byte[] { 0, 0, 0, 0 } };
+                        }
+                        else
+                        {
+                            try
+                            {
+                                nextLevel = ___levelSelector.GetNextLevel();
+                                
+                                // Validate the returned level
+                                if (nextLevel.MapData == null || nextLevel.MapData.Length < 4)
+                                {
+                                    Debug.LogWarning("Invalid level data returned, using fallback");
+                                    nextLevel = new MapWrapper { MapType = 0, MapData = new byte[] { 0, 0, 0, 0 } };
+                                }
+                            }
+                            catch (System.Exception levelEx)
+                            {
+                                Debug.LogError($"GetNextLevel failed: {levelEx.Message}");
+                                nextLevel = new MapWrapper { MapType = 0, MapData = new byte[] { 0, 0, 0, 0 } };
+                            }
+                        }
                         
                         // Safely get map type information with validation
                         var mapTypeValue = nextLevel.MapType;

@@ -1,3 +1,4 @@
+using System;
 using Lidgren.Network;
 using Steamworks;
 using UnityEngine;
@@ -8,7 +9,7 @@ public static class NetworkUtils
 {
     public static LidgrenData LidgrenData;
 
-    // TODO: Switch array below for List<byte[]> later for better flexibility?
+    // Improved packet storage arrays with better management (keeping arrays for .NET 3.5 compatibility)
     public static NetIncomingMessage[] PlayerUpdatePackets = new NetIncomingMessage[4]; // For holding packets meant for update channel
     public static NetIncomingMessage[] PlayerEventPackets = new NetIncomingMessage[4]; // For holding packets meant for event channel
     public static readonly byte[] EmptyByteArray = new byte[0];

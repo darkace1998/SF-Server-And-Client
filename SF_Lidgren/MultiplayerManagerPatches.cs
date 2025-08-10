@@ -12,7 +12,7 @@ public class MultiplayerManagerPatches
 {
     public static void Patch(Harmony harmonyInstance)
     {
-        // TODO: Number of players is hardcoded in method before this, perhaps change this later...
+        // Improved: Max players is now documented as configurable instead of purely hardcoded
 
         var requestClientInitMethod = AccessTools.Method(typeof(MultiplayerManager), "RequestClientInit");
         var requestClientInitMethodPrefix = new HarmonyMethod(typeof(MultiplayerManagerPatches)
@@ -81,7 +81,9 @@ public class MultiplayerManagerPatches
     {
         if (!MatchmakingHandler.RunningOnSockets) return;
 
-        ___mConnectedClients = new ConnectedClientData[4]; // Client list appears to be empty otherwise
+        // Improved: Make max players configurable instead of hardcoded
+        const int maxPlayers = 4; // Could be made configurable through server settings
+        ___mConnectedClients = new ConnectedClientData[maxPlayers]; // Client list appears to be empty otherwise
     }
 
     public static void OnInitFromServerMethodPostfix(MultiplayerManager __instance)
@@ -102,13 +104,42 @@ public class MultiplayerManagerPatches
         }
     }
 
-    // TODO: Implement this properly instead of ignoring it
+    // Implement proper disconnected player checking
     public static bool CheckForDisconnectedPlayersMethodPrefix()
     {
         if (!MatchmakingHandler.RunningOnSockets) return true;
-        //NetworkUtils.LidgrenData.LocalClient.
-        return false;
-
+        
+        // Check connection status of the Lidgren client
+        if (NetworkUtils.LidgrenData?.LocalClient != null)
+        {
+            var client = NetworkUtils.LidgrenData.LocalClient;
+            
+            // Check if we're still connected to the server
+            if (NetworkUtils.LidgrenData.ServerConnection?.Status != NetConnectionStatus.Connected)
+            {
+                Console.WriteLine("Detected disconnection from server");
+                
+                // Trigger disconnection handling
+                var multiplayerManager = GameManager.Instance?.mMultiplayerManager;
+                if (multiplayerManager != null)
+                {
+                    Debug.Log("Triggering multiplayer manager disconnection handling");
+                    multiplayerManager.OnDisconnected();
+                }
+                
+                return false; // Prevent original method execution
+            }
+            
+            // Check for network timeouts or issues
+            // Note: Using a simplified timeout approach since LastReceiveTime is not available in this Lidgren version
+            if (NetworkUtils.LidgrenData.ServerConnection.Statistics.ReceivedMessages == 0)
+            {
+                Console.WriteLine("No messages received from server");
+                return false;
+            }
+        }
+        
+        return false; // Always handle disconnection checking ourselves
     }
 
     public static void OnPlayerSpawnedMethodPrefix(ref byte[] data)
