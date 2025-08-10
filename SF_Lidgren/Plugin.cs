@@ -56,8 +56,8 @@ public class Plugin : BaseUnityPlugin
             var appType = typeof(UnityEngine.Application);
             
             // Safely check if isBatchMode exists before accessing it
-            var batchModeProperty = AccessTools.Property(appType, "isBatchMode");
-            if (batchModeProperty == null)
+            var batchModePropertyInfo = appType.GetProperty("isBatchMode", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (batchModePropertyInfo == null)
             {
                 Logger.LogWarning("Application.isBatchMode property not found in this Unity version, skipping batch mode checks");
             }
