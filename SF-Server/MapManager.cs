@@ -70,6 +70,17 @@ public class MapManager
     }
 
     /// <summary>
+    /// Gets the lobby map data.
+    /// </summary>
+    /// <returns>Map data for the lobby.</returns>
+    public MapData GetLobbyMap()
+    {
+        _currentMapId = 0;
+        _currentMapType = MapType.Lobby;
+        return new MapData(MapType.Lobby, 0, new byte[] { 0, 0, 0, 0 });
+    }
+
+    /// <summary>
     /// Validate if a map change request is valid
     /// </summary>
     /// <param name="requesterIndex">Player requesting the change</param>

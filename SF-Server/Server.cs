@@ -403,7 +403,7 @@ public class Server : IDisposable
         // Use MapManager for current map info
         var currentMap = _mapMgr.CurrentMapType == MapType.Lobby ?
             _mapMgr.GetLobbyMap() :
-            new MapData { MapType = _mapMgr.CurrentMapType, MapId = _mapMgr.CurrentMapId };
+            new MapData(_mapMgr.CurrentMapType, _mapMgr.CurrentMapId, BitConverter.GetBytes(_mapMgr.CurrentMapId));
 
         tempMsg.Write((byte)currentMap.MapType); // Map type
         tempMsg.Write(4); // Int representing number of bytes map has, 4 for single int
@@ -473,48 +473,42 @@ public class Server : IDisposable
             playerUpdateData.SequenceChannel
             );
 
-        var positionInfo = new PositionPackage
-        {
-            Position = new Vector3
-            {
-                Y = SafeReadInt16(playerUpdateData) / 100f,
-                Z = SafeReadInt16(playerUpdateData) / 100f
-            },
-            Rotation = new Vector2
-            {
-                X = playerUpdateData.ReadSByte() / 100f,
-                Y = playerUpdateData.ReadSByte() / 100f
-            },
-            YValue = playerUpdateData.ReadSByte(),
-            MovementType = playerUpdateData.ReadByte()
-        };
+        var positionInfo = new PositionPackage(
+            new Vector3(
+                0f, // X value - not provided in this update
+                SafeReadInt16(playerUpdateData) / 100f,
+                SafeReadInt16(playerUpdateData) / 100f
+            ),
+            new Vector2(
+                playerUpdateData.ReadSByte() / 100f,
+                playerUpdateData.ReadSByte() / 100f
+            ),
+            playerUpdateData.ReadSByte(),
+            playerUpdateData.ReadByte()
+        );
 
         client.PositionInfo = positionInfo;
 
-        var weaponInfo = new WeaponPackage
-        {
-            FightState = playerUpdateData.ReadByte()
-        };
+        var fightState = playerUpdateData.ReadByte();
 
         var numProjectiles = playerUpdateData.ReadUInt16();
         var projectiles = new ProjectilePackage[numProjectiles];
 
         for (ushort i = 0; i < projectiles.Length; i++)
         {
-            projectiles[i] = new ProjectilePackage(new Vector2
-            {
-                X = SafeReadInt16(playerUpdateData),
-                Y = SafeReadInt16(playerUpdateData)
-            },
-                new Vector2
-                {
-                    X = playerUpdateData.ReadSByte(),
-                    Y = playerUpdateData.ReadSByte()
-                },
+            projectiles[i] = new ProjectilePackage(new Vector2(
+                SafeReadInt16(playerUpdateData),
+                SafeReadInt16(playerUpdateData)
+            ),
+                new Vector2(
+                    playerUpdateData.ReadSByte(),
+                    playerUpdateData.ReadSByte()
+                ),
                 playerUpdateData.ReadUInt16());
         }
 
-        weaponInfo.WeaponType = playerUpdateData.ReadByte();
+        var weaponType = playerUpdateData.ReadByte();
+        var weaponInfo = new WeaponPackage(weaponType, fightState, projectiles);
         client.WeaponInfo = weaponInfo;
 
         //Console.WriteLine("Position info: " + positionInfo);
@@ -586,7 +580,7 @@ public class Server : IDisposable
         var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
         var mapData = mapMsgData.PeekBytes(mapMsgData.Data.Length - 5);
 
-        if (!_mapMgr.ValidateMapChange(client?.PlayerIndex ?? -1, mapData))
+        if (!MapManager.ValidateMapChange(client?.PlayerIndex ?? -1, mapData))
         {
             Console.WriteLine($"Invalid map change request from {client?.Username ?? "unknown"}");
             return;
