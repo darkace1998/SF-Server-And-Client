@@ -68,13 +68,13 @@ public class PacketWorker
                 _server.OnPingResponseReceived(user, msg);
                 return;
             case SfPacketType.ClientJoined:
-                //this.mNetworkHandler.OnClientJoined(data);
+                _server.OnClientJoined(user, msg);
                 return;
             case SfPacketType.ClientRequestingAccepting:
                 _server.SendPacketToUser(user, Array.Empty<byte>(), SfPacketType.ClientAccepted);
                 return;
             case SfPacketType.ClientAccepted:
-                //this.mNetworkHandler.OnClientAcceptedByServer();
+                _server.OnClientAcceptedByServer(user, msg);
                 return;
             case SfPacketType.ClientInit:
                 //_server.OnInitFromServer(data);
@@ -98,10 +98,10 @@ public class PacketWorker
                 _server.OnPlayerTookDamage(user, msg);
                 return;
             case SfPacketType.ClientSpawned:
-                //this.mNetworkHandler.OnPlayerSpawned(data);
+                _server.OnPlayerSpawned(user, msg);
                 return;
             case SfPacketType.ClientReadyUp:
-                //this.mNetworkHandler.OnClientReadyUp(data);
+                _server.OnClientReadyUp(user, msg);
                 return;
             case SfPacketType.MapChange:
                 _server.OnMapChanged(user, msg);

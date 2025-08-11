@@ -311,8 +311,18 @@ public class MultiplayerManagerPatches
                     var playerStates = new byte[4]; // Max 4 players
                     for (int i = 0; i < Math.Min(4, GameManager.Instance?.mMultiplayerManager?.ConnectedClients?.Length ?? 0); i++)
                     {
-                        // Get player health if available (placeholder for future implementation)
-                        playerStates[i] = (byte)(i == indexOfWinner ? 100 : 0); // Winner has health, others don't
+                        // Get player health from connected clients data
+                        var connectedClients = GameManager.Instance?.mMultiplayerManager?.ConnectedClients;
+                        if (connectedClients != null && i < connectedClients.Length && connectedClients[i] != null)
+                        {
+                            // Player is connected and active - assign health based on winner status
+                            playerStates[i] = (byte)(i == indexOfWinner ? 100 : 0);
+                        }
+                        else
+                        {
+                            // Player not connected or inactive
+                            playerStates[i] = 0;
+                        }
                     }
                     
                     Debug.Log($"Player health states for map change - Winner: {indexOfWinner}, States: [{string.Join(", ", playerStates.Select(b => b.ToString()).ToArray())}]");

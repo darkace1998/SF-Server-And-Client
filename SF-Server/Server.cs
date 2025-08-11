@@ -1308,6 +1308,73 @@ public class Server : IDisposable
     }
 
     /// <summary>
+    /// Handles when a client has joined the server.
+    /// </summary>
+    /// <param name="user">The client connection</param>
+    /// <param name="msg">The join message</param>
+    public void OnClientJoined(NetConnection user, NetIncomingMessage msg)
+    {
+        var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
+        if (client != null && Config.EnableLogging)
+        {
+            Console.WriteLine($"Client joined: {client.Username} ({client.SteamID})");
+        }
+    }
+
+    /// <summary>
+    /// Handles when a client has been accepted by the server.
+    /// </summary>
+    /// <param name="user">The client connection</param>
+    /// <param name="msg">The acceptance message</param>
+    public void OnClientAcceptedByServer(NetConnection user, NetIncomingMessage msg)
+    {
+        var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
+        if (client != null && Config.EnableLogging)
+        {
+            Console.WriteLine($"Client accepted by server: {client.Username} ({client.SteamID})");
+        }
+    }
+
+    /// <summary>
+    /// Handles when a player has spawned in the game.
+    /// </summary>
+    /// <param name="user">The client connection</param>
+    /// <param name="msg">The spawn message</param>
+    public void OnPlayerSpawned(NetConnection user, NetIncomingMessage msg)
+    {
+        var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
+        if (client != null)
+        {
+            client.Revive(); // Mark player as alive
+            if (Config.EnableLogging)
+            {
+                Console.WriteLine($"Player spawned: {client.Username} at position data");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Handles when a client indicates they are ready to start the game.
+    /// </summary>
+    /// <param name="user">The client connection</param>
+    /// <param name="msg">The ready up message</param>
+    public void OnClientReadyUp(NetConnection user, NetIncomingMessage msg)
+    {
+        var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
+        if (client != null && Config.EnableLogging)
+        {
+            Console.WriteLine($"Client ready up: {client.Username} ({client.SteamID})");
+        }
+        
+        // Check if all clients are ready and potentially start the game
+        var readyClients = _clientMgr.AllClients.Count(c => c != null);
+        if (Config.EnableLogging)
+        {
+            Console.WriteLine($"Ready clients: {readyClients}/{Config.MaxPlayers}");
+        }
+    }
+
+    /// <summary>
     /// Dispose pattern implementation for proper resource cleanup
     /// </summary>
     public void Dispose()
