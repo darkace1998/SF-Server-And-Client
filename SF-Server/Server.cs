@@ -1,6 +1,7 @@
 using System.Text;
 using Lidgren.Network;
 using System.Text.Json;
+using System.Collections.Generic;
 
 namespace SFServer;
 
@@ -499,51 +500,58 @@ public class Server : IDisposable
     public void OnPlayerUpdate(NetConnection user, NetIncomingMessage playerUpdateData)
     {
         var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
+        if (client == null)
+        {
+            LogSecurityEvent("UNKNOWN_CLIENT", "Player update from unregistered client", user);
+            return;
+        }
 
-        // foreach (var b in playerUpdateData.Data)
-        // {
-        //     Console.WriteLine(b);
-        // }
-
-        // 10th and 11th bytes should make up ushort representing the # of projectiles
-        // var earlyNumProjectilesBytes = new[] { playerUpdateData.Data[9], playerUpdateData.Data[10] };
-        // var earlyNumProjectiles = BitConverter.ToUInt16(earlyNumProjectilesBytes);
-
-        // Console.WriteLine("Number of projectiles: " + earlyNumProjectiles);
-
-        // We need to send this packet out to the rest of the clients in the server, +1 byte for weapon type
-        SendPacketToAllUsers(
-            playerUpdateData.PeekBytes(playerUpdateData.Data.Length - 5),
-            SfPacketType.PlayerUpdate,
-            user,
-            NetDeliveryMethod.UnreliableSequenced,
-            playerUpdateData.SequenceChannel
-            );
-
-        var positionInfo = new PositionPackage(
-            new Vector3(
-                0f, // X value - not provided in this update
-                SafeReadInt16(playerUpdateData) / 100f,
-                SafeReadInt16(playerUpdateData) / 100f
-            ),
-            new Vector2(
-                playerUpdateData.ReadSByte() / 100f,
-                playerUpdateData.ReadSByte() / 100f
-            ),
-            playerUpdateData.ReadSByte(),
-            playerUpdateData.ReadByte()
+        // Read the position data from the packet
+        var newPosition = new Vector3(
+            0f, // X value - not provided in this update
+            SafeReadInt16(playerUpdateData) / 100f,
+            SafeReadInt16(playerUpdateData) / 100f
         );
+        
+        var newRotation = new Vector2(
+            playerUpdateData.ReadSByte() / 100f,
+            playerUpdateData.ReadSByte() / 100f
+        );
+        
+        var yValue = playerUpdateData.ReadSByte();
+        var movementType = playerUpdateData.ReadByte();
 
+        // Server-side movement validation
+        var previousPosition = client.PositionInfo.Position;
+        if (!ValidateMovement(previousPosition, newPosition, newRotation, movementType, client))
+        {
+            if (_config.EnableLogging)
+            {
+                Console.WriteLine($"Invalid movement from {client.Username} - rejecting update");
+            }
+            return; // Reject the movement update
+        }
+
+        var positionInfo = new PositionPackage(newPosition, newRotation, yValue, movementType);
         client.PositionInfo = positionInfo;
 
         var fightState = playerUpdateData.ReadByte();
 
         var numProjectiles = playerUpdateData.ReadUInt16();
-        var projectiles = new ProjectilePackage[numProjectiles];
-
-        for (ushort i = 0; i < projectiles.Length; i++)
+        
+        // Validate projectile count to prevent spam/DoS
+        if (numProjectiles > 50) // Reasonable max projectiles per update
         {
-            projectiles[i] = new ProjectilePackage(new Vector2(
+            LogSecurityEvent("EXCESSIVE_PROJECTILES", $"Too many projectiles: {numProjectiles} from {client.Username}", user);
+            return;
+        }
+        
+        var projectiles = new ProjectilePackage[numProjectiles];
+        var validProjectiles = new List<ProjectilePackage>();
+
+        for (ushort i = 0; i < numProjectiles; i++)
+        {
+            var projectile = new ProjectilePackage(new Vector2(
                 SafeReadInt16(playerUpdateData),
                 SafeReadInt16(playerUpdateData)
             ),
@@ -552,28 +560,60 @@ public class Server : IDisposable
                     playerUpdateData.ReadSByte()
                 ),
                 playerUpdateData.ReadUInt16());
+                
+            // Validate each projectile
+            if (ValidateProjectile(projectile, client))
+            {
+                validProjectiles.Add(projectile);
+            }
         }
+
+        // Use only validated projectiles
+        projectiles = validProjectiles.ToArray();
 
         var weaponType = playerUpdateData.ReadByte();
         var weaponInfo = new WeaponPackage(weaponType, fightState, projectiles);
         client.WeaponInfo = weaponInfo;
 
-        //Console.WriteLine("Position info: " + positionInfo);
-        //Console.WriteLine("Weapon info: " + weaponInfo);
+        // Only send the validated update to other clients
+        SendPacketToAllUsers(
+            RebuildPlayerUpdatePacket(positionInfo, fightState, weaponInfo),
+            SfPacketType.PlayerUpdate,
+            user,
+            NetDeliveryMethod.UnreliableSequenced,
+            playerUpdateData.SequenceChannel
+        );
+
+        if (_config.EnableLogging && _config.EnableDebugPacketLogging)
+        {
+            Console.WriteLine($"Validated movement for {client.Username}: {positionInfo}");
+        }
     }
 
     public void OnPlayerForceAdded(NetConnection user, NetIncomingMessage damageData)
     {
-        // Add logic for server-side force tracking
         var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
-        
-        if (client != null && _config.EnableLogging)
+        if (client == null)
+        {
+            LogSecurityEvent("UNKNOWN_CLIENT", "Force packet from unregistered client", user);
+            return;
+        }
+
+        // Validate force data to prevent physics exploits
+        var originalData = damageData.PeekBytes(damageData.Data.Length - 5);
+        if (!ValidatePhysicsForce(originalData, client))
+        {
+            LogSecurityEvent("INVALID_FORCE", $"Invalid physics force from {client.Username}", user);
+            return;
+        }
+
+        if (_config.EnableLogging)
         {
             Console.WriteLine($"Force applied to player {client.Username}");
         }
 
         SendPacketToAllUsers(
-            damageData.PeekBytes(damageData.Data.Length - 5),
+            originalData,
             SfPacketType.PlayerForceAdded,
             user,
             NetDeliveryMethod.ReliableOrdered,
@@ -583,51 +623,64 @@ public class Server : IDisposable
 
     public void OnPlayerTookDamage(NetConnection user, NetIncomingMessage damageData)
     {
-        Console.WriteLine("Sending playertookdamage packet...");
+        var attackerClient = _clientMgr.GetClient(user.RemoteEndPoint.Address);
+        if (attackerClient == null)
+        {
+            LogSecurityEvent("UNKNOWN_ATTACKER", "Damage packet from unregistered client", user);
+            return;
+        }
 
+        var damagedClientEventChannel = damageData.SequenceChannel;
+        var damagedClient = _clientMgr.GetClient((damagedClientEventChannel - 3) / 2);
+        
+        if (damagedClient == null)
+        {
+            LogSecurityEvent("INVALID_TARGET", $"Damage to invalid target from {attackerClient.Username}", user);
+            return;
+        }
+
+        // Read damage data from client (but don't trust the damage amount)
+        var clientDamageAmount = SafeReadFloat(damageData);
+        
+        // Server-side damage calculation based on weapon type, distance, and game rules
+        var calculatedDamage = CalculateServerSideDamage(attackerClient, damagedClient, clientDamageAmount);
+        
+        // Validate damage is reasonable
+        if (calculatedDamage < 0 || calculatedDamage > 100) // Max damage per hit
+        {
+            LogSecurityEvent("INVALID_CALCULATED_DAMAGE", 
+                $"Invalid calculated damage: {calculatedDamage} from {attackerClient.Username} to {damagedClient.Username}", user);
+            return;
+        }
+
+        // Apply server-calculated damage
+        damagedClient.DeductHp(calculatedDamage);
+
+        if (_config.EnableLogging)
+        {
+            Console.WriteLine($"Player {damagedClient.Username} took {calculatedDamage:F1} damage (client sent {clientDamageAmount:F1}), HP: {damagedClient.Hp:F1}, Alive: {damagedClient.IsAlive}");
+        }
+
+        // Create corrected damage packet with server-calculated damage
+        var correctedDamagePacket = CreateDamagePacket(damagedClient.PlayerIndex, calculatedDamage);
+        
         SendPacketToAllUsers(
-            damageData.PeekBytes(damageData.Data.Length - 5),
+            correctedDamagePacket,
             SfPacketType.PlayerTookDamage,
             null,
             NetDeliveryMethod.ReliableOrdered,
             damageData.SequenceChannel
         );
 
-        // Implement server-side HP tracking
-        var attackerClient = _clientMgr.GetClient(user.RemoteEndPoint.Address);
-        var damagedClientEventChannel = damageData.SequenceChannel;
-
-        var damagedClient = _clientMgr.GetClient((damagedClientEventChannel - 3) / 2);
-        var dmgAmount = SafeReadFloat(damageData);
-
-        // Security: Validate damage amount to prevent exploits
-        if (dmgAmount < 0 || dmgAmount > 1000) // Reasonable damage limits
+        // Check if player died
+        if (!damagedClient.IsAlive)
         {
-            LogSecurityEvent("INVALID_DAMAGE", $"Invalid damage amount: {dmgAmount}", user);
-            return;
-        }
-
-        // Update server-side HP tracking
-        if (damagedClient != null)
-        {
-            damagedClient.DeductHp(dmgAmount);
-
-            if (_config.EnableLogging)
+            Console.WriteLine($"Player {damagedClient.Username} has been killed!");
+            
+            // Update attacker stats if available
+            if (attackerClient != damagedClient)
             {
-                Console.WriteLine($"Player {damagedClient.Username} took {dmgAmount} damage, HP: {damagedClient.Hp}, Alive: {damagedClient.IsAlive}");
-            }
-
-            // Check if player died
-            if (!damagedClient.IsAlive)
-            {
-                Console.WriteLine($"Player {damagedClient.Username} has been killed!");
-                
-                // Update attacker stats if available
-                if (attackerClient != null && attackerClient != damagedClient)
-                {
-                    // Note: Would need to implement PlayerStats update methods here
-                    Console.WriteLine($"Kill credited to {attackerClient.Username}");
-                }
+                Console.WriteLine($"Kill credited to {attackerClient.Username}");
             }
         }
 
@@ -936,6 +989,306 @@ public class Server : IDisposable
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Validates a projectile to prevent impossible trajectories or spam
+    /// </summary>
+    /// <param name="projectile">Projectile to validate</param>
+    /// <param name="client">Client firing the projectile</param>
+    /// <returns>True if projectile is valid</returns>
+    private bool ValidateProjectile(ProjectilePackage projectile, ClientInfo client)
+    {
+        // Validate projectile position is reasonable relative to player position
+        var playerPos = client.PositionInfo.Position;
+        var projectilePos = projectile.ShootPosition;
+        
+        var distance = Math.Sqrt(
+            Math.Pow(projectilePos.X - playerPos.Y, 2) + 
+            Math.Pow(projectilePos.Y - playerPos.Z, 2));
+            
+        // Projectile should originate near the player (within reasonable range)
+        const float maxProjectileOriginDistance = 20.0f;
+        if (distance > maxProjectileOriginDistance)
+        {
+            LogSecurityEvent("PROJECTILE_TOO_FAR", 
+                $"Projectile origin too far from player: {distance:F1} units from {client.Username}", null);
+            return false;
+        }
+        
+        // Validate projectile velocity is reasonable
+        var velocity = projectile.ShootVector;
+        var velocityMagnitude = Math.Sqrt(velocity.X * velocity.X + velocity.Y * velocity.Y);
+        
+        const float maxProjectileVelocity = 200.0f;
+        if (velocityMagnitude > maxProjectileVelocity)
+        {
+            LogSecurityEvent("PROJECTILE_TOO_FAST", 
+                $"Projectile velocity too high: {velocityMagnitude:F1} from {client.Username}", null);
+            return false;
+        }
+        
+        // Check for NaN or infinite values
+        if (float.IsNaN(projectilePos.X) || float.IsNaN(projectilePos.Y) ||
+            float.IsNaN(velocity.X) || float.IsNaN(velocity.Y) ||
+            float.IsInfinity(projectilePos.X) || float.IsInfinity(projectilePos.Y) ||
+            float.IsInfinity(velocity.X) || float.IsInfinity(velocity.Y))
+        {
+            LogSecurityEvent("INVALID_PROJECTILE_VALUES", 
+                $"NaN/Infinity projectile values from {client.Username}", null);
+            return false;
+        }
+        
+        return true;
+    }
+
+    /// <summary>
+    /// Validates physics force values to prevent exploits
+    /// </summary>
+    /// <param name="forceData">Force data packet</param>
+    /// <param name="client">Client applying the force</param>
+    /// <returns>True if force values are valid</returns>
+    private bool ValidatePhysicsForce(byte[] forceData, ClientInfo client)
+    {
+        if (forceData == null || forceData.Length < 8) // Need at least 8 bytes for force vector
+        {
+            return false;
+        }
+
+        try
+        {
+            // Read force values (assuming Vector2 force at start of packet)
+            var forceX = BitConverter.ToSingle(forceData, 0);
+            var forceY = BitConverter.ToSingle(forceData, 4);
+            
+            // Validate force magnitude
+            var forceMagnitude = Math.Sqrt(forceX * forceX + forceY * forceY);
+            const float maxForce = 1000f; // Reasonable maximum force
+            
+            if (forceMagnitude > maxForce)
+            {
+                LogSecurityEvent("EXCESSIVE_FORCE", 
+                    $"Force magnitude {forceMagnitude:F1} exceeds limit from {client.Username}", null);
+                return false;
+            }
+            
+            // Check for NaN or infinite values
+            if (float.IsNaN(forceX) || float.IsNaN(forceY) || 
+                float.IsInfinity(forceX) || float.IsInfinity(forceY))
+            {
+                LogSecurityEvent("INVALID_FORCE_VALUES", 
+                    $"NaN/Infinity force values from {client.Username}", null);
+                return false;
+            }
+            
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("FORCE_PARSE_ERROR", 
+                $"Error parsing force data from {client.Username}: {ex.Message}", null);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Calculates server-side damage based on weapon type, distance, and game rules
+    /// </summary>
+    /// <param name="attacker">Attacking player</param>
+    /// <param name="target">Target player</param>
+    /// <param name="clientDamage">Damage amount sent by client (for reference/validation)</param>
+    /// <returns>Server-calculated damage amount</returns>
+    private float CalculateServerSideDamage(ClientInfo attacker, ClientInfo target, float clientDamage)
+    {
+        // Basic damage calculation based on weapon type
+        var weaponType = attacker.WeaponInfo.WeaponType;
+        float baseDamage = GetBaseDamageForWeapon(weaponType);
+        
+        // Calculate distance between players for damage falloff
+        var distance = CalculateDistance(attacker.PositionInfo.Position, target.PositionInfo.Position);
+        float distanceMultiplier = CalculateDistanceMultiplier(distance, weaponType);
+        
+        // Calculate final damage
+        float calculatedDamage = baseDamage * distanceMultiplier;
+        
+        // Compare with client damage and apply anti-cheat logic
+        float maxAllowedDeviation = baseDamage * 0.5f; // Allow 50% deviation for network lag/precision
+        
+        if (Math.Abs(calculatedDamage - clientDamage) > maxAllowedDeviation)
+        {
+            LogSecurityEvent("DAMAGE_MISMATCH", 
+                $"Large damage deviation: server={calculatedDamage:F1}, client={clientDamage:F1} from {attacker.Username}", null);
+        }
+        
+        // Use server calculation but cap it reasonably
+        return Math.Min(calculatedDamage, 100f); // Max 100 damage per hit
+    }
+    
+    /// <summary>
+    /// Gets base damage for a weapon type
+    /// </summary>
+    private static float GetBaseDamageForWeapon(byte weaponType)
+    {
+        // Basic weapon damage values (adjust based on actual game balance)
+        return weaponType switch
+        {
+            0 => 0f,    // No weapon/fists
+            1 => 25f,   // Basic weapon
+            2 => 35f,   // Medium weapon
+            3 => 50f,   // Heavy weapon
+            4 => 75f,   // Powerful weapon
+            _ => 20f    // Default fallback
+        };
+    }
+    
+    /// <summary>
+    /// Calculates distance between two positions
+    /// </summary>
+    private static float CalculateDistance(Vector3 pos1, Vector3 pos2)
+    {
+        var dy = pos1.Y - pos2.Y;
+        var dz = pos1.Z - pos2.Z;
+        return (float)Math.Sqrt(dy * dy + dz * dz);
+    }
+    
+    /// <summary>
+    /// Calculates damage multiplier based on distance and weapon type
+    /// </summary>
+    private static float CalculateDistanceMultiplier(float distance, byte weaponType)
+    {
+        // Different weapons have different effective ranges
+        float maxEffectiveRange = weaponType switch
+        {
+            0 => 2f,    // Melee range
+            1 => 10f,   // Short range
+            2 => 15f,   // Medium range
+            3 => 8f,    // Short range but high damage
+            4 => 20f,   // Long range
+            _ => 10f    // Default
+        };
+        
+        // Linear falloff after effective range
+        if (distance <= maxEffectiveRange)
+        {
+            return 1.0f;
+        }
+        else
+        {
+            // Damage falls off linearly to 25% at 2x effective range
+            float falloffDistance = maxEffectiveRange * 2f;
+            if (distance >= falloffDistance)
+            {
+                return 0.25f;
+            }
+            
+            float falloffRatio = (distance - maxEffectiveRange) / maxEffectiveRange;
+            return 1.0f - (falloffRatio * 0.75f);
+        }
+    }
+    
+    /// <summary>
+    /// Creates a damage packet with server-calculated damage
+    /// </summary>
+    private byte[] CreateDamagePacket(int targetPlayerIndex, float damage)
+    {
+        var tempMsg = _masterServer.CreateMessage();
+        tempMsg.Write(damage);
+        // Add other damage-related data as needed by the game protocol
+        return tempMsg.Data;
+    }
+
+    /// <summary>
+    /// Validates player movement to prevent speed hacking and impossible movements
+    /// </summary>
+    /// <param name="previousPosition">Previous position</param>
+    /// <param name="newPosition">New position</param>
+    /// <param name="newRotation">New rotation</param>
+    /// <param name="movementType">Movement type flags</param>
+    /// <param name="client">Client info</param>
+    /// <returns>True if movement is valid</returns>
+    private bool ValidateMovement(Vector3 previousPosition, Vector3 newPosition, Vector2 newRotation, byte movementType, ClientInfo client)
+    {
+        // Allow initial position (first movement from spawn)
+        if (previousPosition.Y == 0 && previousPosition.Z == 0)
+        {
+            return true;
+        }
+
+        // Calculate movement delta
+        var deltaY = Math.Abs(newPosition.Y - previousPosition.Y);
+        var deltaZ = Math.Abs(newPosition.Z - previousPosition.Z);
+        var totalMovement = Math.Sqrt(deltaY * deltaY + deltaZ * deltaZ);
+
+        // Maximum movement per update (assumes ~60 FPS, adjust as needed)
+        // Stick Fight characters move relatively slowly, so this should be reasonable
+        const float maxMovementPerUpdate = 5.0f; // Units per update
+        
+        if (totalMovement > maxMovementPerUpdate)
+        {
+            LogSecurityEvent("SPEED_HACK", $"Excessive movement: {totalMovement:F2} units from {client.Username}", null);
+            return false;
+        }
+
+        // Basic bounds checking (adjust based on typical map sizes)
+        const float maxCoordinate = 1000f;
+        const float minCoordinate = -1000f;
+        
+        if (newPosition.Y < minCoordinate || newPosition.Y > maxCoordinate ||
+            newPosition.Z < minCoordinate || newPosition.Z > maxCoordinate)
+        {
+            LogSecurityEvent("OUT_OF_BOUNDS", $"Position out of bounds: Y={newPosition.Y:F2}, Z={newPosition.Z:F2} from {client.Username}", null);
+            return false;
+        }
+
+        // Validate rotation values (should be normalized)
+        if (Math.Abs(newRotation.X) > 2.0f || Math.Abs(newRotation.Y) > 2.0f)
+        {
+            LogSecurityEvent("INVALID_ROTATION", $"Invalid rotation: X={newRotation.X:F2}, Y={newRotation.Y:F2} from {client.Username}", null);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Rebuilds a player update packet with validated data
+    /// </summary>
+    /// <param name="positionInfo">Validated position info</param>
+    /// <param name="fightState">Fight state</param>
+    /// <param name="weaponInfo">Weapon info</param>
+    /// <returns>Byte array containing the rebuilt packet</returns>
+    private byte[] RebuildPlayerUpdatePacket(PositionPackage positionInfo, byte fightState, WeaponPackage weaponInfo)
+    {
+        var tempMsg = _masterServer.CreateMessage();
+        
+        // Write position data
+        tempMsg.Write((short)(positionInfo.Position.Y * 100f));
+        tempMsg.Write((short)(positionInfo.Position.Z * 100f));
+        tempMsg.Write((sbyte)(positionInfo.Rotation.X * 100f));
+        tempMsg.Write((sbyte)(positionInfo.Rotation.Y * 100f));
+        tempMsg.Write(positionInfo.YValue);
+        tempMsg.Write(positionInfo.MovementType);
+        
+        // Write fight state
+        tempMsg.Write(fightState);
+        
+        // Write projectiles
+        var projectiles = weaponInfo.GetProjectilePackages();
+        tempMsg.Write((ushort)projectiles.Length);
+        
+        foreach (var projectile in projectiles)
+        {
+            tempMsg.Write((short)projectile.ShootPosition.X);
+            tempMsg.Write((short)projectile.ShootPosition.Y);
+            tempMsg.Write((sbyte)projectile.ShootVector.X);
+            tempMsg.Write((sbyte)projectile.ShootVector.Y);
+            tempMsg.Write(projectile.SyncIndex);
+        }
+        
+        // Write weapon type
+        tempMsg.Write(weaponInfo.WeaponType);
+        
+        return tempMsg.Data;
     }
 
     /// <summary>
