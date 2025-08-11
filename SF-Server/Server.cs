@@ -27,6 +27,8 @@ public class Server : IDisposable
     private readonly Random _rand;
     private readonly JsonSerializerOptions _jsonOptions;
     private uint _lastProcessedTimestamp;
+    private DateTime _lastPingTime;
+    private const int PingIntervalSeconds = 5; // Send ping every 5 seconds
     //private readonly List<IPAddress> _approvedIPs;
     private const string LidgrenIdentifier = "monky.SF_Lidgren";
     private const string StickFightAppId = "674940";
@@ -67,6 +69,7 @@ public class Server : IDisposable
         _clientMgr = new ClientManager(config.MaxPlayers);
         _mapMgr = new MapManager(config);
         _lastProcessedTimestamp = 0;
+        _lastPingTime = DateTime.UtcNow;
         //_approvedIPs = new List<IPAddress>();
     }
 
@@ -103,6 +106,13 @@ public class Server : IDisposable
 
     public void Update()
     {
+        // Send periodic pings to all clients
+        if ((DateTime.UtcNow - _lastPingTime).TotalSeconds >= PingIntervalSeconds)
+        {
+            SendPingToAllClients();
+            _lastPingTime = DateTime.UtcNow;
+        }
+
         var msg = _masterServer.ReadMessage();
         if (msg is null) return;
 
@@ -811,12 +821,130 @@ public class Server : IDisposable
     }
 
     /// <summary>
+    /// Handle ping requests from clients and respond with pong
+    /// </summary>
+    /// <param name="user">The client connection</param>
+    /// <param name="pingData">The ping message data</param>
+    public void OnPingReceived(NetConnection user, NetIncomingMessage pingData)
+    {
+        if (pingData?.Data == null || pingData.Data.Length < 5)
+        {
+            if (_config.EnableLogging)
+            {
+                Console.WriteLine("Received invalid ping packet");
+            }
+            return;
+        }
+
+        try
+        {
+            // Read the original timestamp from the ping packet (skipping the packet header)
+            pingData.Position = 20; // Skip past packet timestamp (4 bytes) and type (1 byte) from ParseGamePacket
+            var originalTimestamp = pingData.ReadUInt32();
+
+            // Send ping response with the original timestamp
+            var responseData = BitConverter.GetBytes(originalTimestamp);
+            SendPacketToUser(user, responseData, SfPacketType.PingResponse, NetDeliveryMethod.ReliableOrdered);
+
+            if (_config.EnableLogging)
+            {
+                var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
+                Console.WriteLine($"Responded to ping from {client?.Username ?? "unknown"} (timestamp: {originalTimestamp})");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("PING_ERROR", $"Error processing ping: {ex.Message}", user);
+        }
+    }
+
+    /// <summary>
+    /// Handle ping responses from clients and calculate round-trip time
+    /// </summary>
+    /// <param name="user">The client connection</param>
+    /// <param name="pongData">The pong message data</param>
+    public void OnPingResponseReceived(NetConnection user, NetIncomingMessage pongData)
+    {
+        if (pongData?.Data == null || pongData.Data.Length < 9) // 5 bytes header + 4 bytes timestamp
+        {
+            if (_config.EnableLogging)
+            {
+                Console.WriteLine("Received invalid ping response packet");
+            }
+            return;
+        }
+
+        try
+        {
+            var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
+            if (client == null)
+            {
+                if (_config.EnableLogging)
+                {
+                    Console.WriteLine("Received ping response from unknown client");
+                }
+                return;
+            }
+
+            // Read the original timestamp from the response
+            pongData.Position = 20; // Skip packet header
+            var originalTimestamp = pongData.ReadUInt32();
+            var currentTime = GetCurrentTime();
+
+            // Calculate round-trip time
+            var roundTripTime = currentTime - originalTimestamp;
+            
+            // Handle timestamp overflow
+            if (originalTimestamp > currentTime)
+            {
+                // Timestamp wrapped around
+                roundTripTime = (uint.MaxValue - originalTimestamp) + currentTime;
+            }
+
+            // Update client ping (limit to reasonable values)
+            client.Ping = Math.Min((int)roundTripTime, 9999);
+
+            if (_config.EnableLogging)
+            {
+                Console.WriteLine($"Updated ping for {client.Username}: {client.Ping}ms");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogSecurityEvent("PONG_ERROR", $"Error processing ping response: {ex.Message}", user);
+        }
+    }
+
+    /// <summary>
+    /// Send periodic ping requests to all connected clients
+    /// </summary>
+    public void SendPingToAllClients()
+    {
+        foreach (var connection in _masterServer.Connections)
+        {
+            if (connection.Status == NetConnectionStatus.Connected)
+            {
+                try
+                {
+                    var currentTime = GetCurrentTime();
+                    var pingData = BitConverter.GetBytes(currentTime);
+                    SendPacketToUser(connection, pingData, SfPacketType.Ping, NetDeliveryMethod.ReliableOrdered);
+                }
+                catch (Exception ex)
+                {
+                    LogSecurityEvent("PING_SEND_ERROR", $"Error sending ping: {ex.Message}", connection);
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Security: Log security events
     /// </summary>
     /// <param name="eventType">Type of security event</param>
     /// <param name="details">Event details</param>
     /// <param name="connection">Associated connection if any</param>
-    private void LogSecurityEvent(string eventType, string details, NetConnection connection = null)
+    private static void LogSecurityEvent(string eventType, string details, NetConnection connection = null)
     {
         var logMessage = $"[SECURITY] {eventType}: {details}";
         if (connection != null)
