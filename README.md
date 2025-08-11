@@ -1,14 +1,12 @@
 # SF-Server-And-Client
 
-A custom, dedicated UDP socket server for Stick Fight: The Game using the networking library Lidgren.
+A custom, dedicated UDP socket server for Stick Fight: The Game using the Lidgren networking library.
 
 This project provides:
 - **SF-Server**: A dedicated server for hosting Stick Fight: The Game matches
 - **SF_Lidgren**: A BepInEx client plugin to connect to dedicated servers
 
 ## 🚀 Quick Start
-
-**New to SF-Server?** Check out our [Quick Setup Guide](QUICKSTART.md) for the fastest way to get started!
 
 ### Server Setup
 
@@ -44,16 +42,25 @@ This project provides:
 
 1. **Prerequisites**
    - Stick Fight: The Game installed
-   - BepInEx 5.x installed
+   - BepInEx 5.x framework installed
 
-2. **Installation**
-   - Download the latest client plugin from releases
-   - Place `SF_Lidgren.dll` in `BepInEx\plugins` directory
-   - Start the game and join servers via the in-game GUI
+2. **Install Required Dependencies**
+   Copy the following DLL files from your Stick Fight installation to the `SF_Lidgren/` directory:
+   - `Assembly-CSharp.dll` (from `StickFight_Data/Managed/`)
+   - `Assembly-CSharp-firstpass.dll` (from `StickFight_Data/Managed/`)
+   - `UnityEngine.dll` (from `StickFight_Data/Managed/`)
+   - `Lidgren.Network.dll` (from `StickFight_Data/Managed/`)
 
-## 📖 Documentation
+3. **Build and Install**
+   ```bash
+   cd SF_Lidgren
+   dotnet build
+   # Copy the built SF_Lidgren.dll to BepInEx\plugins\ in your game directory
+   ```
 
-### Server Command Line Options
+## 📖 Server Configuration
+
+### Command Line Options
 
 | Option | Description | Required | Default |
 |--------|-------------|----------|---------|
@@ -73,152 +80,135 @@ dotnet run -- --steam_web_api_token ABC123 --host_steamid 76561198000000000
 dotnet run -- --port 7777 --max_players 8 --steam_web_api_token ABC123 --host_steamid 76561198000000000
 
 # Using config file
-dotnet run -- server_config.json --steam_web_api_token ABC123 --host_steamid 76561198000000000
+dotnet run -- --config server_config.json --steam_web_api_token ABC123 --host_steamid 76561198000000000
 ```
 
 ## 🔧 Development
 
 ### Building the Project
 
-#### Server Only
 ```bash
-cd SF-Server
-dotnet restore
-dotnet build
-```
-
-#### Client Only
-```bash
-cd SF_Lidgren
-dotnet restore
-dotnet build
-```
-
-#### Full Solution (Recommended)
-```bash
-# Both server and client projects build successfully
+# Build everything
 dotnet build SF-Server.sln
 
-# Or use the provided build script
-./build-debug.sh all
-```
+# Or use provided scripts
+./build-debug.sh          # Development build
+./build-release.sh        # Production build
 
-#### Quick Development Build
-```bash
-# Use the provided build script for easier development
-./build-debug.sh          # Build everything
-./build-debug.sh server    # Build only server
-./build-debug.sh client    # Build only client
-./build-debug.sh run-server-debug  # Start server with debug credentials
+# Server only
+cd SF-Server && dotnet build
+
+# Client only (requires game dependencies)
+cd SF_Lidgren && dotnet build
 ```
 
 ### Project Structure
 
 ```
 SF-Server-And-Client/
-├── SF-Server/              # Dedicated server project (.NET 8.0)
+├── SF-Server/              # Dedicated server (.NET 8.0)
 │   ├── Program.cs          # Entry point and configuration
 │   ├── Server.cs           # Main server logic
 │   ├── ServerConfig.cs     # Configuration management
-│   ├── ShutdownHandler.cs  # Graceful shutdown handling
 │   ├── PacketWorker.cs     # Packet processing
 │   ├── ClientManager.cs    # Client connection management
 │   └── ...
-├── SF_Lidgren/             # Client plugin project (.NET 3.5)
+├── SF_Lidgren/             # Client plugin (.NET 3.5)
 │   ├── Plugin.cs           # BepInEx plugin entry point
-│   ├── TempGUI.cs          # In-game server connection GUI
+│   ├── TempGUI.cs          # In-game server browser GUI
 │   ├── NetworkUtils.cs     # Networking utilities
 │   └── *Patches.cs         # Harmony patches for game integration
-└── README.md
+├── build-*.sh              # Build scripts
+├── Dockerfile              # Container setup
+└── docker-compose.yml      # Docker deployment
 ```
 
 ## 🌟 Features
 
-### Current Features
 - ✅ Steam Web API authentication
 - ✅ UDP networking with Lidgren
 - ✅ Player connection management
-- ✅ Basic game packet handling (movement, damage, chat)
+- ✅ Game packet handling (movement, damage, chat)
 - ✅ Graceful server shutdown
-- ✅ Configuration management
 - ✅ Cross-platform server support
+- ✅ Docker deployment support
+- ✅ In-game server browser GUI
 
-### Planned Features
-- 🔄 Custom map support
-- 🔄 Advanced server administration
-- 🔄 Player statistics tracking
-- 🔄 Enhanced security features
-- 🔄 Web-based server management
-- 🔄 Docker deployment
+## 🐛 Troubleshooting
 
-## 🐛 Known Issues
+### Common Issues
 
-1. **Client Plugin Dependencies**: The client plugin requires game assemblies that must be manually copied from the Stick Fight installation
-2. **BepInEx Package Source**: Some build environments may have issues accessing the BepInEx NuGet source
-3. **Limited Map Support**: Currently only supports the base game maps
+1. **Client Build Fails**: Ensure game dependencies are copied to `SF_Lidgren/` directory
+2. **Server Connection Failed**: Check firewall settings and Steam Web API token
+3. **BepInEx Plugin Not Loading**: Verify BepInEx installation and plugin placement
+
+### Debug Mode
+
+```bash
+# Run server with debug logging
+./build-debug.sh run-server-debug
+
+# Enable debug packet logging in server_config.json
+{
+  "EnableDebugPacketLogging": true,
+  "LogPath": "debug_log.txt"
+}
+```
+
+## 🚀 Deployment
+
+### Docker Deployment
+
+```bash
+# Build and run with Docker
+docker-compose up --build
+
+# Or use provided build script
+./build-release.sh docker
+```
+
+### Manual Deployment
+
+1. Build the server: `dotnet publish SF-Server -c Release`
+2. Copy the published files to your server
+3. Configure firewall to allow UDP traffic on your chosen port
+4. Set up environment variables or config file with your Steam API credentials
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Test thoroughly
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
+3. Make your changes and test thoroughly
+4. Commit your changes (`git commit -m 'Add amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
 
 ## 📋 Requirements
 
-### Server Requirements
+### Server
 - .NET 8.0 SDK
-- Network connectivity for Steam Web API
+- Steam Web API token
 - Open UDP port (default: 1337)
 
-### Client Requirements
+### Client
 - Stick Fight: The Game
-- BepInEx 5.x
-- Game assemblies (✅ **Already included** in SF_Lidgren directory)
+- BepInEx 5.x framework
+- Game assembly dependencies (see Client Setup)
 
-## 🛠 Development & Debugging
+## 🔒 Security
 
-### Quick Development Setup
-1. **Clone and Build**: `git clone <repo> && cd SF-Server-And-Client && ./build-debug.sh`
-2. **Debug Server**: `./build-debug.sh run-server-debug` (uses dummy credentials)
-3. **Build Client**: Client DLL automatically built to `SF_Lidgren/bin/Debug/net35/SF_Lidgren.dll`
-
-### IDE Support
-- **Visual Studio Code**: Pre-configured launch and task configurations in `.vscode/`
-- **Debugging**: Set breakpoints and debug server directly in IDE
-- **Build Tasks**: Use Ctrl+Shift+P → "Tasks: Run Task" → "build-all"
-
-### Development Workflow
-1. Make changes to server/client code
-2. Build with `./build-debug.sh` or IDE
-3. For server: Run with debugger or `run-server-debug`
-4. For client: Copy DLL to game's `BepInEx/plugins/` and test in-game
-
-See [DEV_SETUP.md](DEV_SETUP.md) for detailed development instructions.
-
-## 🔒 Security Notes
-
-- Never commit your Steam Web API token to version control
-- Use configuration files or environment variables for sensitive data
-- Consider firewall rules for production deployments
+- Never commit Steam Web API tokens to version control
+- Use environment variables or secure config files for sensitive data
+- Consider implementing rate limiting for production deployments
+- Review firewall rules and network security
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 📋 Documentation
-
-- [Quick Setup Guide](QUICKSTART.md) - Get started in minutes
-- [Client Setup Guide](CLIENT_SETUP.md) - Detailed client configuration
-- [Changelog](CHANGELOG.md) - Version history and improvements
-- [Docker Guide](docker-compose.yml) - Container deployment
-
 ## 🙏 Acknowledgments
 
-- [Lidgren Network Library](https://github.com/lidgren/lidgren-network-gen3) for networking
+- [Lidgren Network Library](https://github.com/lidgren/lidgren-network-gen3) for reliable UDP networking
 - [BepInEx](https://github.com/BepInEx/BepInEx) for game modding framework
 - [Harmony](https://github.com/pardeike/Harmony) for runtime patching
 - The Stick Fight: The Game community
