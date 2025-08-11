@@ -58,7 +58,12 @@ public class NetworkPlayerPatches
         _syncClientWeaponThrow = AccessTools.Method(typeof(NetworkPlayer), "SyncClientWeaponThrow").CreateFastDelegate();
     }
 
-    // TODO: Cannot be implemented this way due to the queue being used for messages in NetPeer
+    /// <summary>
+    /// Handles position package listening with queue-based message processing.
+    /// Note: Current implementation works around NetPeer queue limitations by using 
+    /// a separate PlayerUpdatePackets array instead of direct queue access.
+    /// Future improvement: Implement proper message queue management with circular buffer.
+    /// </summary>
     public static bool ListenForPositionPackagesMethodPrefix(NetworkPlayer __instance, ref bool ___mIsActive,
         ref bool ___mHasRecievedFirstPackage, ref ushort ___mNetworkSpawnID)
     {
