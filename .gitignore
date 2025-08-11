@@ -28,6 +28,21 @@ server_config.json
 debug_log.txt
 *.log
 
+# Analysis and Security Reports
+build-output.log
+build-lint.log
+build-full.log
+analysis-summary.txt
+lint-report.txt
+security-report.txt
+code-analysis.txt
+complexity-report.txt
+doc-report.txt
+format-check.txt
+quick-lint.log
+changed-files.txt
+*.sarif
+
 # Environment Files
 .env
 

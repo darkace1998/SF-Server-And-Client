@@ -1,0 +1,182 @@
+name: Pre-commit Checks
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  pre-commit:
+    name: Pre-commit Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Install tools
+      run: |
+        dotnet tool install -g dotnet-format
+        dotnet tool install -g dotnet-outdated-tool
+
+    - name: Restore dependencies
+      run: dotnet restore SF-Server/SF-Server.csproj
+
+    - name: Fast security check
+      id: security-check
+      run: |
+        echo "🔍 Running fast security checks..."
+        
+        # Check for potential secrets in changed files
+        if git diff --name-only origin/main HEAD | grep -E '\.(cs|json|config)$' > changed-files.txt; then
+          echo "Checking changed files for secrets..."
+          while read -r file; do
+            if [ -f "$file" ]; then
+              echo "Checking $file..."
+              # Look for suspicious patterns
+              if grep -E "(api[_-]?key|password|secret|token).{0,20}['\"][A-Za-z0-9+/=]{20,}['\"]" "$file"; then
+                echo "⚠️ Potential secret found in $file"
+                echo "security-issue=true" >> $GITHUB_OUTPUT
+              fi
+            fi
+          done < changed-files.txt
+        else
+          echo "No relevant files changed"
+        fi
+        
+        # Check for TODO/FIXME/HACK comments that might indicate security issues
+        if git diff --name-only origin/main HEAD | grep '\.cs$' | xargs grep -n -E "(TODO.*security|FIXME.*security|HACK.*auth)" || true; then
+          echo "⚠️ Security-related TODO/FIXME found"
+        fi
+
+    - name: Code formatting check
+      id: format-check
+      run: |
+        echo "🎨 Checking code formatting..."
+        if dotnet format SF-Server/SF-Server.csproj --verify-no-changes --verbosity minimal; then
+          echo "✅ Code formatting is correct"
+          echo "format-ok=true" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Code formatting issues found"
+          echo "format-ok=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Build check
+      id: build-check
+      run: |
+        echo "🔨 Quick build check..."
+        if dotnet build SF-Server/SF-Server.csproj --configuration Release --no-restore --verbosity minimal; then
+          echo "✅ Build successful"
+          echo "build-ok=true" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Build failed"
+          echo "build-ok=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Quick lint check
+      id: lint-check
+      run: |
+        echo "📋 Running quick lint checks..."
+        # Count high-priority warnings
+        dotnet build SF-Server/SF-Server.csproj \
+          --configuration Release \
+          --no-restore \
+          --verbosity normal \
+          2>&1 | tee quick-lint.log
+          
+        SECURITY_WARNINGS=$(grep -c 'CA5[0-9][0-9][0-9]' quick-lint.log || echo 0)
+        CRITICAL_WARNINGS=$(grep -c 'CA2[0-9][0-9][0-9]' quick-lint.log || echo 0)
+        
+        echo "Security warnings (CA5xxx): $SECURITY_WARNINGS"
+        echo "Critical warnings (CA2xxx): $CRITICAL_WARNINGS"
+        
+        if [ "$SECURITY_WARNINGS" -gt 0 ] || [ "$CRITICAL_WARNINGS" -gt 0 ]; then
+          echo "❌ Critical security warnings found"
+          echo "lint-ok=false" >> $GITHUB_OUTPUT
+        else
+          echo "✅ No critical security warnings"
+          echo "lint-ok=true" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Check dependencies
+      id: deps-check
+      run: |
+        echo "📦 Checking for vulnerable dependencies..."
+        cd SF-Server
+        if dotnet list package --vulnerable 2>&1 | grep -q "vulnerable"; then
+          echo "❌ Vulnerable dependencies found"
+          dotnet list package --vulnerable
+          echo "deps-ok=false" >> $GITHUB_OUTPUT
+        else
+          echo "✅ No vulnerable dependencies"
+          echo "deps-ok=true" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Generate pre-commit summary
+      if: always()
+      run: |
+        echo "## 🔍 Pre-commit Check Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Security check
+        if [ "${{ steps.security-check.outputs.security-issue }}" == "true" ]; then
+          echo "- ❌ **Security**: Potential secrets detected" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ✅ **Security**: No secrets detected" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Format check
+        if [ "${{ steps.format-check.outputs.format-ok }}" == "true" ]; then
+          echo "- ✅ **Formatting**: Code style is correct" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ **Formatting**: Style issues found (run \`dotnet format\`)" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Build check
+        if [ "${{ steps.build-check.outputs.build-ok }}" == "true" ]; then
+          echo "- ✅ **Build**: Compilation successful" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ **Build**: Compilation failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Lint check
+        if [ "${{ steps.lint-check.outputs.lint-ok }}" == "true" ]; then
+          echo "- ✅ **Linting**: No critical warnings" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ **Linting**: Critical security warnings found" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Dependencies check
+        if [ "${{ steps.deps-check.outputs.deps-ok }}" == "true" ]; then
+          echo "- ✅ **Dependencies**: No vulnerabilities" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ **Dependencies**: Vulnerable packages found" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "*Pre-commit checks help catch issues early in development.*" >> $GITHUB_STEP_SUMMARY
+
+    - name: Fail on critical issues
+      if: steps.security-check.outputs.security-issue == 'true' || steps.build-check.outputs.build-ok == 'false' || steps.deps-check.outputs.deps-ok == 'false'
+      run: |
+        echo "❌ Critical issues found that must be addressed before merging:"
+        [ "${{ steps.security-check.outputs.security-issue }}" == "true" ] && echo "  - Potential secrets detected"
+        [ "${{ steps.build-check.outputs.build-ok }}" == "false" ] && echo "  - Build failure"
+        [ "${{ steps.deps-check.outputs.deps-ok }}" == "false" ] && echo "  - Vulnerable dependencies"
+        exit 1
