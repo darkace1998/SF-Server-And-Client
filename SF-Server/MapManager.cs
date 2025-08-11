@@ -77,10 +77,6 @@ public class MapManager
     }
 
     /// <summary>
-    /// Validate if a map change request is valid
-    /// </summary>
-    /// <param name="requesterIndex">Player requesting the change</param>
-    /// <summary>
     /// Validates if a map change request is valid.
     /// </summary>
     /// <param name="requesterIndex">Player requesting the change.</param>
@@ -94,7 +90,6 @@ public class MapManager
         return true;
     }
 
-    /// <summary>
     /// <summary>
     /// Processes a map change request.
     /// </summary>
