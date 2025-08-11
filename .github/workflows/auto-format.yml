@@ -1,0 +1,115 @@
+name: Auto-Format Code
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    types: [opened, synchronize, reopened]
+    paths:
+      - '**/*.cs'
+      - '**/*.csproj'
+      - '.editorconfig'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  format:
+    name: Auto-Format C# Code
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        ref: ${{ github.head_ref }}
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Install dotnet format
+      run: dotnet tool install -g dotnet-format
+
+    - name: Restore dependencies
+      run: dotnet restore SF-Server/SF-Server.csproj
+
+    - name: Check formatting
+      id: format-check
+      run: |
+        echo "Checking code formatting..."
+        if dotnet format SF-Server/SF-Server.csproj --verify-no-changes --verbosity minimal; then
+          echo "formatted=false" >> $GITHUB_OUTPUT
+          echo "✅ Code is properly formatted"
+        else
+          echo "formatted=true" >> $GITHUB_OUTPUT
+          echo "⚠️ Code formatting issues found"
+        fi
+
+    - name: Apply formatting
+      if: steps.format-check.outputs.formatted == 'true'
+      run: |
+        echo "Applying automatic formatting..."
+        dotnet format SF-Server/SF-Server.csproj --verbosity minimal
+        echo "✅ Formatting applied"
+
+    - name: Check for changes
+      if: steps.format-check.outputs.formatted == 'true'
+      id: verify-changed-files
+      run: |
+        if git diff --quiet; then
+          echo "changed=false" >> $GITHUB_OUTPUT
+          echo "No changes after formatting"
+        else
+          echo "changed=true" >> $GITHUB_OUTPUT
+          echo "Changes detected after formatting"
+        fi
+
+    - name: Commit changes
+      if: steps.format-check.outputs.formatted == 'true' && steps.verify-changed-files.outputs.changed == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add -A
+        git commit -m "style: auto-format code with dotnet format
+
+        - Applied consistent code formatting
+        - Fixed whitespace and indentation issues
+        - Enforced .editorconfig rules
+
+        [skip ci]"
+        git push
+
+    - name: Add PR comment
+      if: steps.format-check.outputs.formatted == 'true' && steps.verify-changed-files.outputs.changed == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '🎨 **Auto-formatting applied**\n\nI\'ve automatically formatted your code to match the project\'s style guidelines. The changes have been committed to this PR.\n\n**What was fixed:**\n- Consistent indentation and spacing\n- Line ending normalization\n- Code style according to .editorconfig\n\nNo functional changes were made to your code.'
+          })
+
+    - name: Summary
+      if: always()
+      run: |
+        echo "## 🎨 Code Formatting Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ steps.format-check.outputs.formatted }}" == "true" ]; then
+          if [ "${{ steps.verify-changed-files.outputs.changed }}" == "true" ]; then
+            echo "- ✅ **Formatting applied and committed**" >> $GITHUB_STEP_SUMMARY
+            echo "- 📝 Changes committed to PR branch" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ℹ️ **No changes needed after format check**" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "- ✅ **Code already properly formatted**" >> $GITHUB_STEP_SUMMARY
+          echo "- 🎯 No formatting changes required" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "*Auto-formatting helps maintain consistent code style across the project.*" >> $GITHUB_STEP_SUMMARY
