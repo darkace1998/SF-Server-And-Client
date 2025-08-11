@@ -36,10 +36,6 @@ public class MapManager
     public MapType CurrentMapType => _currentMapType;
 
     /// <summary>
-    /// Get the next map for the round
-    /// </summary>
-    /// <returns>Map data containing type and ID</returns>
-    /// <summary>
     /// Gets the next map for the round.
     /// </summary>
     /// <returns>Map data containing type and ID.</returns>
@@ -84,13 +80,11 @@ public class MapManager
     /// Validate if a map change request is valid
     /// </summary>
     /// <param name="requesterIndex">Player requesting the change</param>
-    /// <param name="mapData">Requested map data</param>
-    /// <returns>True if valid</returns>
     /// <summary>
     /// Validates if a map change request is valid.
     /// </summary>
-    // <param name="requesterIndex">Player requesting the change.</param>
-    // <param name="mapData">Requested map data.</param>
+    /// <param name="requesterIndex">Player requesting the change.</param>
+    /// <param name="mapData">Requested map data.</param>
     /// <returns>True if valid.</returns>
     public static bool ValidateMapChange(int requesterIndex, byte[] mapData)
     {
@@ -101,13 +95,10 @@ public class MapManager
     }
 
     /// <summary>
-    /// Process a map change request
-    /// </summary>
-    /// <param name="mapData">New map data</param>
     /// <summary>
     /// Processes a map change request.
     /// </summary>
-    // <param name="mapData">New map data.</param>
+    /// <param name="mapData">New map data.</param>
     public void ProcessMapChange(byte[] mapData)
     {
     ArgumentNullException.ThrowIfNull(mapData);
