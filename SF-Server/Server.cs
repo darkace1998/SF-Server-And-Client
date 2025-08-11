@@ -1,6 +1,7 @@
 using System.Text;
 using Lidgren.Network;
 using System.Text.Json;
+using System.Collections.Generic;
 
 namespace SFServer;
 
@@ -537,11 +538,20 @@ public class Server : IDisposable
         var fightState = playerUpdateData.ReadByte();
 
         var numProjectiles = playerUpdateData.ReadUInt16();
-        var projectiles = new ProjectilePackage[numProjectiles];
-
-        for (ushort i = 0; i < projectiles.Length; i++)
+        
+        // Validate projectile count to prevent spam/DoS
+        if (numProjectiles > 50) // Reasonable max projectiles per update
         {
-            projectiles[i] = new ProjectilePackage(new Vector2(
+            LogSecurityEvent("EXCESSIVE_PROJECTILES", $"Too many projectiles: {numProjectiles} from {client.Username}", user);
+            return;
+        }
+        
+        var projectiles = new ProjectilePackage[numProjectiles];
+        var validProjectiles = new List<ProjectilePackage>();
+
+        for (ushort i = 0; i < numProjectiles; i++)
+        {
+            var projectile = new ProjectilePackage(new Vector2(
                 SafeReadInt16(playerUpdateData),
                 SafeReadInt16(playerUpdateData)
             ),
@@ -550,7 +560,16 @@ public class Server : IDisposable
                     playerUpdateData.ReadSByte()
                 ),
                 playerUpdateData.ReadUInt16());
+                
+            // Validate each projectile
+            if (ValidateProjectile(projectile, client))
+            {
+                validProjectiles.Add(projectile);
+            }
         }
+
+        // Use only validated projectiles
+        projectiles = validProjectiles.ToArray();
 
         var weaponType = playerUpdateData.ReadByte();
         var weaponInfo = new WeaponPackage(weaponType, fightState, projectiles);
@@ -970,6 +989,57 @@ public class Server : IDisposable
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Validates a projectile to prevent impossible trajectories or spam
+    /// </summary>
+    /// <param name="projectile">Projectile to validate</param>
+    /// <param name="client">Client firing the projectile</param>
+    /// <returns>True if projectile is valid</returns>
+    private bool ValidateProjectile(ProjectilePackage projectile, ClientInfo client)
+    {
+        // Validate projectile position is reasonable relative to player position
+        var playerPos = client.PositionInfo.Position;
+        var projectilePos = projectile.ShootPosition;
+        
+        var distance = Math.Sqrt(
+            Math.Pow(projectilePos.X - playerPos.Y, 2) + 
+            Math.Pow(projectilePos.Y - playerPos.Z, 2));
+            
+        // Projectile should originate near the player (within reasonable range)
+        const float maxProjectileOriginDistance = 20.0f;
+        if (distance > maxProjectileOriginDistance)
+        {
+            LogSecurityEvent("PROJECTILE_TOO_FAR", 
+                $"Projectile origin too far from player: {distance:F1} units from {client.Username}", null);
+            return false;
+        }
+        
+        // Validate projectile velocity is reasonable
+        var velocity = projectile.ShootVector;
+        var velocityMagnitude = Math.Sqrt(velocity.X * velocity.X + velocity.Y * velocity.Y);
+        
+        const float maxProjectileVelocity = 200.0f;
+        if (velocityMagnitude > maxProjectileVelocity)
+        {
+            LogSecurityEvent("PROJECTILE_TOO_FAST", 
+                $"Projectile velocity too high: {velocityMagnitude:F1} from {client.Username}", null);
+            return false;
+        }
+        
+        // Check for NaN or infinite values
+        if (float.IsNaN(projectilePos.X) || float.IsNaN(projectilePos.Y) ||
+            float.IsNaN(velocity.X) || float.IsNaN(velocity.Y) ||
+            float.IsInfinity(projectilePos.X) || float.IsInfinity(projectilePos.Y) ||
+            float.IsInfinity(velocity.X) || float.IsInfinity(velocity.Y))
+        {
+            LogSecurityEvent("INVALID_PROJECTILE_VALUES", 
+                $"NaN/Infinity projectile values from {client.Username}", null);
+            return false;
+        }
+        
+        return true;
     }
 
     /// <summary>
