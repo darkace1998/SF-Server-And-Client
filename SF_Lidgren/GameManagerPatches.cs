@@ -30,9 +30,12 @@ public static class GameManagerPatches
         var codes = new List<CodeInstruction>(instructions);
         var newCodes = new List<CodeInstruction>();
         
+        // Create a label that will point to the original method code
+        var originalMethodLabel = new Label();
+        
         // Add check at the beginning for socket networking
         newCodes.Add(new CodeInstruction(OpCodes.Call, AccessTools.Property(typeof(MatchmakingHandler), nameof(MatchmakingHandler.RunningOnSockets)).GetGetMethod()));
-        newCodes.Add(new CodeInstruction(OpCodes.Brfalse, codes[0].labels.Count > 0 ? codes[0].labels[0] : new Label()));
+        newCodes.Add(new CodeInstruction(OpCodes.Brfalse, originalMethodLabel));
         
         // If running on sockets, call our custom method and return
         newCodes.Add(new CodeInstruction(OpCodes.Ldarg_0)); // GameManager instance
@@ -41,6 +44,11 @@ public static class GameManagerPatches
         newCodes.Add(new CodeInstruction(OpCodes.Ret));
         
         // Add original instructions for non-socket path
+        // Mark the first original instruction with our label
+        if (codes.Count > 0)
+        {
+            codes[0].labels.Add(originalMethodLabel);
+        }
         newCodes.AddRange(codes);
         
         return newCodes;
