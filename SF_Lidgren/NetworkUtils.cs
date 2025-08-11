@@ -122,43 +122,81 @@ public static class NetworkUtils
         {
             Debug.Log("Exiting server...");
 
-            if (LidgrenData?.LocalClient != null && IsConnected)
+            // Safely disconnect from server
+            if (LidgrenData?.LocalClient != null)
             {
-                LidgrenData.LocalClient.Disconnect("Player disconnected");
-                Debug.Log("Disconnected from server");
+                try
+                {
+                    if (IsConnected)
+                    {
+                        LidgrenData.LocalClient.Disconnect("Player disconnected");
+                        Debug.Log("Disconnected from server");
+                    }
+                    
+                    // Shutdown the client to release resources
+                    LidgrenData.LocalClient.Shutdown("Client shutdown");
+                    Debug.Log("Client shutdown completed");
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogError($"Error during client disconnect/shutdown: {ex.Message}");
+                }
             }
 
+            // Cancel auth ticket safely
             if (LidgrenData?.AuthTicketHandler != null)
             {
-                SteamUser.CancelAuthTicket(LidgrenData.AuthTicketHandler);
-                Debug.Log("Auth ticket canceled");
+                try
+                {
+                    SteamUser.CancelAuthTicket(LidgrenData.AuthTicketHandler);
+                    Debug.Log("Auth ticket canceled");
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogError($"Error canceling auth ticket: {ex.Message}");
+                }
             }
 
             // Reset connection state
             IsConnecting = false;
             ConnectionTime = 0f;
+            
+            // Clear LidgrenData reference to prevent stale data usage
+            LidgrenData = null;
 
             if (!usingDebugExitButton) return; // If using the default "Main Menu" button
 
             // Clean up game state
-            var multiplayerManager = GameManager.Instance?.mMultiplayerManager;
-            if (multiplayerManager != null)
+            try
             {
-                multiplayerManager.OnDisconnected(); // Removes player objects from screen
-                Debug.Log("Multiplayer manager cleaned up");
-            }
+                var multiplayerManager = GameManager.Instance?.mMultiplayerManager;
+                if (multiplayerManager != null)
+                {
+                    multiplayerManager.OnDisconnected(); // Removes player objects from screen
+                    Debug.Log("Multiplayer manager cleaned up");
+                }
 
-            var gameManager = GameManager.Instance;
-            if (gameManager != null)
+                var gameManager = GameManager.Instance;
+                if (gameManager != null)
+                {
+                    gameManager.RestartGame(); // Sends player back to main menu
+                    Debug.Log("Game restarted to main menu");
+                }
+            }
+            catch (System.Exception ex)
             {
-                gameManager.RestartGame(); // Sends player back to main menu
-                Debug.Log("Game restarted to main menu");
+                Debug.LogError($"Error during game state cleanup: {ex.Message}");
             }
         }
         catch (System.Exception ex)
         {
             Debug.LogError($"Error during server exit: {ex.Message}");
             LastError = $"Exit failed: {ex.Message}";
+            
+            // Force reset connection state even if cleanup failed
+            IsConnecting = false;
+            ConnectionTime = 0f;
+            LidgrenData = null;
         }
     }
 

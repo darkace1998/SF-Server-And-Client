@@ -109,34 +109,49 @@ public class MultiplayerManagerPatches
     {
         if (!MatchmakingHandler.RunningOnSockets) return true;
         
-        // Check connection status of the Lidgren client
-        if (NetworkUtils.LidgrenData?.LocalClient != null)
+        try
         {
-            var client = NetworkUtils.LidgrenData.LocalClient;
-            
-            // Check if we're still connected to the server
-            if (NetworkUtils.LidgrenData.ServerConnection?.Status != NetConnectionStatus.Connected)
+            // Check connection status of the Lidgren client
+            if (NetworkUtils.LidgrenData?.LocalClient != null && NetworkUtils.LidgrenData?.ServerConnection != null)
             {
-                Console.WriteLine("Detected disconnection from server");
+                var client = NetworkUtils.LidgrenData.LocalClient;
                 
-                // Trigger disconnection handling
-                var multiplayerManager = GameManager.Instance?.mMultiplayerManager;
-                if (multiplayerManager != null)
+                // Check if we're still connected to the server
+                if (NetworkUtils.LidgrenData.ServerConnection.Status != NetConnectionStatus.Connected)
                 {
-                    Debug.Log("Triggering multiplayer manager disconnection handling");
-                    multiplayerManager.OnDisconnected();
+                    Console.WriteLine("Detected disconnection from server");
+                    
+                    // Trigger disconnection handling
+                    var multiplayerManager = GameManager.Instance?.mMultiplayerManager;
+                    if (multiplayerManager != null)
+                    {
+                        Debug.Log("Triggering multiplayer manager disconnection handling");
+                        multiplayerManager.OnDisconnected();
+                    }
+                    
+                    return false; // Prevent original method execution
                 }
                 
-                return false; // Prevent original method execution
+                // Check for network timeouts or issues
+                // Note: Using a simplified timeout approach since LastReceiveTime is not available in this Lidgren version
+                if (NetworkUtils.LidgrenData.ServerConnection.Statistics.ReceivedMessages == 0)
+                {
+                    Console.WriteLine("No messages received from server");
+                    return false;
+                }
             }
-            
-            // Check for network timeouts or issues
-            // Note: Using a simplified timeout approach since LastReceiveTime is not available in this Lidgren version
-            if (NetworkUtils.LidgrenData.ServerConnection.Statistics.ReceivedMessages == 0)
+            else
             {
-                Console.WriteLine("No messages received from server");
+                // If we don't have valid connection data, assume disconnected
+                Debug.LogWarning("No valid connection data available, assuming disconnected");
                 return false;
             }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Error during disconnection check: {ex.Message}");
+            // On error, assume we need to handle disconnection
+            return false;
         }
         
         return false; // Always handle disconnection checking ourselves
@@ -167,9 +182,15 @@ public class MultiplayerManagerPatches
                 nextLevel.MapData = new byte[] { 0, 0, 0, 0 }; // Fallback to lobby map
                 nextLevel.MapType = 0; // Lobby type
             }
+            
+            // Validate local player index (don't try to assign since it's read-only)
+            if (__instance.LocalPlayerIndex < 0 || __instance.LocalPlayerIndex >= 4)
+            {
+                Debug.LogWarning($"Invalid LocalPlayerIndex {__instance.LocalPlayerIndex}, using fallback logic");
+            }
 
             var unreadyAllPlayersMethod = AccessTools.Method(typeof(MultiplayerManager), "UnReadyAllPlayers");
-            unreadyAllPlayersMethod.Invoke(__instance, null);
+            unreadyAllPlayersMethod?.Invoke(__instance, null);
 
             var array = new byte[2 + nextLevel.MapData.Length];
             using (var memoryStream = new MemoryStream(array))
@@ -183,8 +204,11 @@ public class MultiplayerManagerPatches
             }
 
             Debug.Log($"Sending map change - MapType: {nextLevel.MapType}, DataLength: {nextLevel.MapData.Length}, Winner: {indexOfWinner}");
+            
+            // Use safe player index for channel
+            var playerIndex = (__instance.LocalPlayerIndex >= 0 && __instance.LocalPlayerIndex < 4) ? __instance.LocalPlayerIndex : 0;
             NetworkUtils.SendPacketToServer(array, P2PPackageHandler.MsgType.MapChange, NetDeliveryMethod.ReliableOrdered,
-                __instance.LocalPlayerIndex);
+                playerIndex);
         }
         catch (System.Exception ex)
         {
@@ -195,13 +219,15 @@ public class MultiplayerManagerPatches
             try
             {
                 Debug.Log("Attempting fallback map change...");
+                var playerIndex = (__instance.LocalPlayerIndex >= 0 && __instance.LocalPlayerIndex < 4) ? __instance.LocalPlayerIndex : 0;
                 var fallbackArray = new byte[] { indexOfWinner, 0, 0, 0, 0, 0 }; // Lobby map fallback
                 NetworkUtils.SendPacketToServer(fallbackArray, P2PPackageHandler.MsgType.MapChange, NetDeliveryMethod.ReliableOrdered,
-                    __instance.LocalPlayerIndex);
+                    playerIndex);
             }
             catch (System.Exception fallbackEx)
             {
                 Debug.LogError($"Fallback map change also failed: {fallbackEx.Message}");
+                NetworkUtils.SetError($"Map change failed: {fallbackEx.Message}");
             }
         }
         
