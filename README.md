@@ -8,7 +8,7 @@ This project provides:
 
 ## 🚀 Quick Start
 
-**New to SF-Server?** Check out our [Quick Setup Guide](QUICKSTART.md) for the fastest way to get started!
+**New to SF-Server?** Check out our [Complete Setup Guide](SETUP_GUIDE.md) for the fastest way to get started!
 
 ### Server Setup
 
@@ -197,7 +197,7 @@ SF-Server-And-Client/
 3. For server: Run with debugger or `run-server-debug`
 4. For client: Copy DLL to game's `BepInEx/plugins/` and test in-game
 
-See [DEV_SETUP.md](DEV_SETUP.md) for detailed development instructions.
+See [SETUP_GUIDE.md](SETUP_GUIDE.md) for detailed development instructions.
 
 ## 🔒 Security Notes
 
@@ -211,9 +211,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📋 Documentation
 
-- [Quick Setup Guide](QUICKSTART.md) - Get started in minutes
-- [Client Setup Guide](CLIENT_SETUP.md) - Detailed client configuration
-- [Changelog](CHANGELOG.md) - Version history and improvements
+- [Complete Setup Guide](SETUP_GUIDE.md) - Everything you need to get started
 - [Docker Guide](docker-compose.yml) - Container deployment
 
 ## 🙏 Acknowledgments

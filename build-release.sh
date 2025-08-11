@@ -51,7 +51,7 @@ dotnet publish SF-Server/SF-Server.csproj \
 # Copy documentation and configuration files
 echo "Copying documentation..."
 cp README.md "$OUTPUT_DIR/"
-cp CLIENT_SETUP.md "$OUTPUT_DIR/"
+cp SETUP_GUIDE.md "$OUTPUT_DIR/"
 cp .env.example "$OUTPUT_DIR/"
 cp docker-compose.yml "$OUTPUT_DIR/"
 cp Dockerfile "$OUTPUT_DIR/"

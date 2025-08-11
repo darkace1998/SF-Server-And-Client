@@ -115,7 +115,7 @@ jobs:
         
         # Copy documentation
         cp README.md "$SERVER_DIR/"
-        cp CLIENT_SETUP.md "$SERVER_DIR/"
+        cp SETUP_GUIDE.md "$SERVER_DIR/"
         cp .env.example "$SERVER_DIR/"
         cp docker-compose.yml "$SERVER_DIR/"
         cp Dockerfile "$SERVER_DIR/"
