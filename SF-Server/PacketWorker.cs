@@ -62,12 +62,10 @@ public class PacketWorker
         switch (messageType)
         {
             case SfPacketType.Ping:
-                if (msg.Data.Length > 0)
-                    //this.SendP2PPacketToUser(steamIdRemote, data, PacketWorker.SfPacketType.PingResponse, EP2PSend.k_EP2PSendReliable, 0);
-                    return;
+                _server.OnPingReceived(user, msg);
                 return;
             case SfPacketType.PingResponse:
-                //PingHandler.PingMessageRecieved(steamIdRemote.m_SteamID, data);
+                _server.OnPingResponseReceived(user, msg);
                 return;
             case SfPacketType.ClientJoined:
                 //this.mNetworkHandler.OnClientJoined(data);
