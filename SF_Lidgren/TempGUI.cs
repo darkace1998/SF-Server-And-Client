@@ -192,6 +192,11 @@ public class TempGUI : MonoBehaviour
         {
             Port = newPort;
         }
+        else if (!string.IsNullOrEmpty(portString) && !int.TryParse(portString, out _))
+        {
+            // Reset to last valid port if input is invalid
+            Debug.LogWarning($"Invalid port number entered: {portString}");
+        }
         GUILayout.EndHorizontal();
 
         GUILayout.Space(10);
@@ -311,8 +316,29 @@ public class TempGUI : MonoBehaviour
     {
         try
         {
+            // Validate address and port before attempting connection
+            if (string.IsNullOrEmpty(Address) || Address.Trim().Length == 0)
+            {
+                SetStatus("Invalid address: Address cannot be empty", Color.red);
+                return;
+            }
+
+            if (Port <= 0 || Port > 65535)
+            {
+                SetStatus("Invalid port: Port must be between 1 and 65535", Color.red);
+                return;
+            }
+
             Debug.Log($"Attempting to connect to {Address}:{Port}...");
             SetStatus("Connecting...", Color.yellow);
+            
+            // Check if we're already connected
+            if (NetworkUtils.IsConnected)
+            {
+                SetStatus("Already connected to server", Color.yellow);
+                return;
+            }
+            
             MatchMakingHandlerSockets.Instance.JoinServer();
         }
         catch (System.Exception ex)

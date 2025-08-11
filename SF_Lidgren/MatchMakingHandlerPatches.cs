@@ -64,6 +64,13 @@ public static class MatchMakingHandlerPatches
     {
         if (!MatchmakingHandler.RunningOnSockets) return true;
 
+        // Add null safety checks to prevent NullReferenceException
+        if (NetworkUtils.LidgrenData?.ServerConnection == null)
+        {
+            __result = false;
+            return false;
+        }
+
         __result = NetworkUtils.LidgrenData.ServerConnection.Status == NetConnectionStatus.Connected;
         return false;
     }
