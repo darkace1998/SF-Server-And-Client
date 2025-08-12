@@ -39,8 +39,24 @@ public static class MatchmakingHandlerSocketsPatches
         {
             if ((msg = ___m_Client.ReadMessage()) == null) return false;
 
+            // Handle system messages (connection status, approval, etc.) by passing them to original handler
+            if (msg.MessageType == NetIncomingMessageType.StatusChanged ||
+                msg.MessageType == NetIncomingMessageType.ConnectionApproval ||
+                msg.MessageType == NetIncomingMessageType.DiscoveryResponse ||
+                msg.MessageType == NetIncomingMessageType.Error ||
+                msg.MessageType == NetIncomingMessageType.VerboseDebugMessage ||
+                msg.MessageType == NetIncomingMessageType.DebugMessage ||
+                msg.MessageType == NetIncomingMessageType.WarningMessage ||
+                msg.MessageType == NetIncomingMessageType.ErrorMessage)
+            {
+                Debug.Log($"System message received: {msg.MessageType}");
+                __result = msg;
+                return false; // Let the original method process system messages
+            }
+
+            // For data messages, check the channel to determine if it's player data
             var channel = msg.SequenceChannel;
-            Debug.Log("Msg has channel: " + channel);
+            Debug.Log($"Data message received with channel: {channel}, type: {msg.MessageType}");
 
             if (channel is > -2 and < 2 or > 9)//  Don't want NetworkPlayer updates going through the normal p2p handler
             {
@@ -101,6 +117,8 @@ public static class MatchmakingHandlerSocketsPatches
             var netPeerConfiguration = new NetPeerConfiguration(Plugin.AppIdentifier);
 
             netPeerConfiguration.EnableMessageType(NetIncomingMessageType.DiscoveryResponse);
+            netPeerConfiguration.EnableMessageType(NetIncomingMessageType.StatusChanged);
+            netPeerConfiguration.EnableMessageType(NetIncomingMessageType.ConnectionApproval);
 
             var netClient = new NetClient(netPeerConfiguration);
             netClient.Start();

@@ -375,22 +375,60 @@ public class TempGUI : MonoBehaviour
         var lidgrenData = NetworkUtils.LidgrenData;
         if (lidgrenData?.ServerConnection == null)
         {
+            if (NetworkUtils.IsConnecting)
+            {
+                return "Starting connection...";
+            }
             return "Not connected";
         }
 
         var connectionStatus = lidgrenData.ServerConnection.Status;
-        return connectionStatus switch
+        var statusText = connectionStatus switch
         {
             NetConnectionStatus.None => "Not connected",
             NetConnectionStatus.InitiatedConnect => "Connecting...",
             NetConnectionStatus.ReceivedInitiation => "Received connection",
-            NetConnectionStatus.RespondedAwaitingApproval => "Awaiting approval",
+            NetConnectionStatus.RespondedAwaitingApproval => "Awaiting server approval",
             NetConnectionStatus.RespondedConnect => "Connected (responding)",
             NetConnectionStatus.Connected => "Connected",
             NetConnectionStatus.Disconnecting => "Disconnecting...",
-            NetConnectionStatus.Disconnected => "Disconnected",
+            NetConnectionStatus.Disconnected => GetDisconnectionReason(lidgrenData.ServerConnection),
             _ => $"Unknown status: {connectionStatus}"
         };
+
+        // Add additional context for connection issues
+        if (!string.IsNullOrEmpty(NetworkUtils.LastError))
+        {
+            statusText += $"\nLast error: {NetworkUtils.LastError}";
+        }
+
+        return statusText;
+    }
+
+    private string GetDisconnectionReason(NetConnection connection)
+    {
+        if (connection.RemoteEndPoint != null)
+        {
+            // Try to get disconnection reason if available
+            try
+            {
+                var reasonField = typeof(NetConnection).GetField("m_disconnectReason", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (reasonField != null)
+                {
+                    var reason = reasonField.GetValue(connection) as string;
+                    if (!string.IsNullOrEmpty(reason))
+                    {
+                        return $"Disconnected: {reason}";
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"Could not get disconnection reason: {ex.Message}");
+            }
+        }
+        return "Disconnected";
     }
 
     private void SetStatus(string message, Color color)
