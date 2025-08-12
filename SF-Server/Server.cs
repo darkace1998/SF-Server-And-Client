@@ -543,6 +543,47 @@ public class Server : IDisposable
         // Console.WriteLine(); 
 
         SendPacketToUser(user, tempMsg.Data, SfPacketType.ClientInit);
+        
+        // Check if we should auto-start single player
+        CheckAndHandleSinglePlayerAutoStart();
+    }
+
+    /// <summary>
+    /// Checks if there's only one player and auto-starts them into a map if configured
+    /// </summary>
+    private void CheckAndHandleSinglePlayerAutoStart()
+    {
+        // Only proceed if auto-start is enabled and we're currently in lobby
+        if (!_config.AutoStartSinglePlayer || _mapMgr.CurrentMapType != MapType.Lobby)
+            return;
+
+        // Count actual connected clients
+        var connectedClients = _clientMgr.Clients.Count(c => c != null);
+        
+        // If we have exactly one player, transition to a game map
+        if (connectedClients == 1)
+        {
+            var newMap = _mapMgr.GetNextMap();
+            _mapMgr.ProcessMapChange(newMap.GetData());
+            
+            // Send map change to all clients (just the one player in this case)
+            var mapChangeMsg = _masterServer.CreateMessage();
+            mapChangeMsg.Write(byte.MaxValue); // No specific winner 
+            mapChangeMsg.Write((byte)newMap.MapType);
+            mapChangeMsg.Write(newMap.MapId);
+            
+            SendPacketToAllUsers(
+                mapChangeMsg.Data,
+                SfPacketType.MapChange,
+                null,
+                NetDeliveryMethod.ReliableOrdered
+            );
+            
+            if (_config.EnableLogging)
+            {
+                Console.WriteLine($"Auto-started single player into map: {newMap.MapId} (Type: {newMap.MapType})");
+            }
+        }
     }
 
     public void OnPlayerRequestingToSpawn(NetConnection user, NetIncomingMessage spawnPosData)

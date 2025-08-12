@@ -21,6 +21,11 @@ public class ServerConfig
     /// Network game options for server configuration
     /// </summary>
     public NetworkOptions GameOptions { get; set; } = NetworkOptions.Default;
+    
+    /// <summary>
+    /// Whether single players should automatically load into a map instead of waiting in lobby
+    /// </summary>
+    public bool AutoStartSinglePlayer { get; set; } = true;
 
     /// <summary>
     /// Load configuration from a JSON file
@@ -174,6 +179,19 @@ public class ServerConfig
                     }
                     break;
 
+                case "--auto_start_single_player":
+                    didParse = bool.TryParse(args[i + 1], out var autoStart);
+                    if (didParse)
+                    {
+                        AutoStartSinglePlayer = autoStart;
+                        Console.WriteLine($"Auto start single player set to: {AutoStartSinglePlayer}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Invalid auto start single player value '{args[i + 1]}', using default: {AutoStartSinglePlayer}");
+                    }
+                    break;
+
                 case "--config":
                     // Handle config file loading
                     var configFromFile = LoadFromFile(args[i + 1]);
@@ -184,6 +202,7 @@ public class ServerConfig
                     AuthDelayMs = configFromFile.AuthDelayMs;
                     EnableConsoleOutput = configFromFile.EnableConsoleOutput;
                     GameOptions = configFromFile.GameOptions;
+                    AutoStartSinglePlayer = configFromFile.AutoStartSinglePlayer;
                     // Don't override credentials from config file for security
                     Console.WriteLine($"Configuration loaded from: {args[i + 1]}");
                     break;

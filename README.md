@@ -36,7 +36,8 @@ This project provides:
      "EnableDebugPacketLogging": false,
      "LogPath": "debug_log.txt",
      "AuthDelayMs": 1000,
-     "EnableConsoleOutput": true
+     "EnableConsoleOutput": true,
+     "AutoStartSinglePlayer": true
    }
    ```
 
@@ -61,6 +62,7 @@ This project provides:
 | `--steam_web_api_token <token>` | Steam Web API token | Yes | - |
 | `--host_steamid <steamid>` | Host Steam ID | Yes | - |
 | `--max_players <count>` | Maximum players (1-10) | No | 4 |
+| `--auto_start_single_player <true/false>` | Auto-start single players into maps | No | true |
 | `--config <file>` | Load configuration from file | No | - |
 
 ### Example Usage
@@ -71,6 +73,9 @@ dotnet run -- --steam_web_api_token ABC123 --host_steamid 76561198000000000
 
 # Custom port and player count
 dotnet run -- --port 7777 --max_players 8 --steam_web_api_token ABC123 --host_steamid 76561198000000000
+
+# Disable auto-start for single players (keep them in lobby)
+dotnet run -- --auto_start_single_player false --steam_web_api_token ABC123 --host_steamid 76561198000000000
 
 # Using config file
 dotnet run -- server_config.json --steam_web_api_token ABC123 --host_steamid 76561198000000000
