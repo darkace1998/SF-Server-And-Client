@@ -30,6 +30,9 @@ public class Server : IDisposable
     private uint _lastProcessedTimestamp;
     private DateTime _lastPingTime;
     private const int PingIntervalSeconds = 5; // Send ping every 5 seconds
+    private readonly object _logLock = new object();
+    private FileStream? _logFileStream;
+    private StreamWriter? _logWriter;
     //private readonly List<IPAddress> _approvedIPs;
     private const string LidgrenIdentifier = "monky.SF_Lidgren";
     private const string StickFightAppId = "674940";
@@ -51,6 +54,12 @@ public class Server : IDisposable
 
         var server = new NetServer(netConfig);
         ServerLogPath = Path.Combine(Environment.CurrentDirectory, config.LogPath);
+        
+        // Initialize file logging if enabled
+        if (config.EnableLogging)
+        {
+            InitializeFileLogging();
+        }
         _masterServer = server;
         _webApitoken = config.SteamWebApiToken;
         _hostSteamId = new SteamId(config.HostSteamId);
@@ -85,14 +94,100 @@ public class Server : IDisposable
     {
     }
 
+    /// <summary>
+    /// Initialize file logging system
+    /// </summary>
+    private void InitializeFileLogging()
+    {
+        try
+        {
+            // Ensure directory exists
+            var logDirectory = Path.GetDirectoryName(ServerLogPath);
+            if (!string.IsNullOrEmpty(logDirectory) && !Directory.Exists(logDirectory))
+            {
+                Directory.CreateDirectory(logDirectory);
+            }
+
+            // Create or append to log file
+            _logFileStream = new FileStream(ServerLogPath, FileMode.Append, FileAccess.Write, FileShare.Read);
+            _logWriter = new StreamWriter(_logFileStream, Encoding.UTF8)
+            {
+                AutoFlush = true // Ensure immediate writing
+            };
+
+            // Write session start marker
+            LogToFile($"=== SF-Server session started at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC ===");
+            LogToFile($"Server configuration: Port={_config.Port}, MaxPlayers={_config.MaxPlayers}, Host={_config.HostSteamId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to initialize file logging: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Log message to both console and file (if logging enabled)
+    /// </summary>
+    /// <param name="message">Message to log</param>
+    private void Log(string message)
+    {
+        // Always log to console if console output is enabled
+        if (_config.EnableConsoleOutput)
+        {
+            Console.WriteLine(message);
+        }
+
+        // Log to file if logging is enabled
+        if (_config.EnableLogging)
+        {
+            LogToFile(message);
+        }
+    }
+
+    /// <summary>
+    /// Log message directly to file with timestamp
+    /// </summary>
+    /// <param name="message">Message to log</param>
+    private void LogToFile(string message)
+    {
+        if (_logWriter == null) return;
+
+        lock (_logLock)
+        {
+            try
+            {
+                var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                _logWriter.WriteLine($"[{timestamp}] {message}");
+            }
+            catch (Exception ex)
+            {
+                // If file logging fails, fallback to console
+                Console.WriteLine($"File logging error: {ex.Message}");
+                Console.WriteLine($"Original message: {message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Log debug message (only if debug logging enabled)
+    /// </summary>
+    /// <param name="message">Debug message to log</param>
+    private void LogDebug(string message)
+    {
+        if (_config.EnableDebugPacketLogging)
+        {
+            Log($"[DEBUG] {message}");
+        }
+    }
+
     public bool Start()
     {
         _masterServer.Start();
 
-        Console.WriteLine("Starting up UDP socket server: " + _masterServer.Status);
+        Log("Starting up UDP socket server: " + _masterServer.Status);
         if (string.IsNullOrEmpty(_webApitoken))
         {
-            Console.WriteLine("Invalid steam web api token, please specify it properly as a program parameter. " +
+            Log("Invalid steam web api token, please specify it properly as a program parameter. " +
                               "This is required for user auth so the server won't start without it.");
         }
 
@@ -102,7 +197,7 @@ public class Server : IDisposable
     public void Close()
     {
         _masterServer.Shutdown("Shutting down server.");
-        Console.WriteLine("Server has been shutdown.");
+        Log("Server has been shutdown.");
     }
 
     public void Update()
@@ -150,11 +245,11 @@ public class Server : IDisposable
                 OnPlayerDiscovered(msg);
                 break;
             default:
-                Console.WriteLine("Unhandled type: " + msg.MessageType);
+                Log("Unhandled type: " + msg.MessageType);
                 break;
         }
 
-        Console.WriteLine("Recycling msg with length: " + msg.Data.Length + "\n");
+        LogDebug("Recycling msg with length: " + msg.Data.Length);
         _masterServer.Recycle(msg);
     }
 
@@ -165,7 +260,7 @@ public class Server : IDisposable
         response.Write("You have discovered Monky's server, greetings!");
 
         _masterServer.SendDiscoveryResponse(response, senderEndPoint);
-        Console.WriteLine("Player discovered, sending response to: " + senderEndPoint.Address);
+        Log("Player discovered, sending response to: " + senderEndPoint.Address);
     }
 
     private void OnPlayerRequestingConnection(NetIncomingMessage msg)
@@ -175,7 +270,7 @@ public class Server : IDisposable
         // Check connection cooldown
         if (!_clientMgr.IsConnectionAllowed(address))
         {
-            Console.WriteLine($"Connection from {address} denied due to cooldown");
+            Log($"Connection from {address} denied due to cooldown");
             msg.SenderConnection.Deny("Too many connection attempts. Please wait before trying again.");
             _masterServer.Recycle(msg);
             return;
@@ -186,22 +281,22 @@ public class Server : IDisposable
 
         if (NumberOfClients == _config.MaxPlayers)
         {
-            Console.WriteLine("Server is full, refusing connection...");
+            Log("Server is full, refusing connection...");
             msg.SenderConnection.Deny("Server is full, try again later.");
             _masterServer.Recycle(msg);
             return;
         }
 
-        Console.WriteLine($"Attempting to authenticate user from {address}...");
+        Log($"Attempting to authenticate user from {address}...");
         var client = _clientMgr.GetClient(address);
 
         if (client is not null)
         {
-            Console.WriteLine($"Client detected as re-connecting: {client.Username} (Steam ID: {client.SteamID})");
+            Log($"Client detected as re-connecting: {client.Username} (Steam ID: {client.SteamID})");
             // Don't remove the client here, let the authentication process handle duplicates
         }
 
-        Console.WriteLine("Starting authentication process...");
+        Log("Starting authentication process...");
         Task.Run(() => AuthenticateUser(msg)); // Client should always auth when joining even if they've joined before
     }
 
@@ -234,7 +329,7 @@ public class Server : IDisposable
             switch (newStatus)
             {
                 case NetConnectionStatus.RespondedConnect:
-                    Console.WriteLine("Number of clients connected is now: " + NumberOfClients);
+                    Log("Number of clients connected is now: " + NumberOfClients);
                     return;
                 case NetConnectionStatus.Disconnected:
                     OnPlayerExit(msg);
@@ -260,7 +355,7 @@ public class Server : IDisposable
         var exitingPlayer = _clientMgr.GetClient(msg.GetSenderIP());
         if (exitingPlayer is null) return;
 
-        Console.WriteLine("Client is leaving: " + exitingPlayer.Username);
+        Log("Client is leaving: " + exitingPlayer.Username);
         exitingPlayer.Status = NetConnectionStatus.Disconnected;
         _clientMgr.RemoveDisconnectedClients();
     }
@@ -273,16 +368,16 @@ public class Server : IDisposable
         // Post to Steam Web API to verify ticket
         var authResult = await VerifyAuthTicketRequest(msg).ConfigureAwait(false);
 
-        Console.WriteLine("IS PLAYER AUTHED: " + authResult);
+        Log("IS PLAYER AUTHED: " + authResult);
         if (!authResult) // Player is not authed
         {
-            Console.WriteLine("Player is not authorized by Steam, denying...");
+            Log("Player is not authorized by Steam, denying...");
             msg.SenderConnection.Deny("You are not authorized under Steam."); // Client will not join
             _masterServer.Recycle(msg);
             return;
         }
 
-        Console.WriteLine("Player has successfully authed, allowing them to join...");
+        Log("Player has successfully authed, allowing them to join...");
         //_approvedIPs.Add(senderConnection.RemoteEndPoint.Address);
         senderConnection.Approve(); // Client will join
         _masterServer.Recycle(msg);
@@ -295,13 +390,13 @@ public class Server : IDisposable
         if (msg.Data is null) return false;
 
         var authTicket = new AuthTicket(msg.Data);
-        Console.WriteLine("Attempting to verify user ticket: " + authTicket);
+        Log("Attempting to verify user ticket: " + authTicket);
 
         // Development/testing bypass for dummy tokens
         if (_webApitoken == "DUMMY_TOKEN" || _webApitoken == "DEBUG_TOKEN" || _webApitoken.StartsWith("DEVELOPMENT"))
         {
-            Console.WriteLine("WARNING: Using dummy Steam Web API token - authentication bypassed for testing");
-            Console.WriteLine("This would normally fail in production. Please use a real Steam Web API token.");
+            Log("WARNING: Using dummy Steam Web API token - authentication bypassed for testing");
+            Log("This would normally fail in production. Please use a real Steam Web API token.");
             
             // For testing, we can either:
             // 1. Always deny (strict security) - uncomment next line
@@ -309,7 +404,7 @@ public class Server : IDisposable
             
             // 2. Allow for testing purposes (current behavior) - create a fake successful auth
             // This allows testing the connection flow without Steam API
-            Console.WriteLine("DEVELOPMENT MODE: Allowing connection for testing purposes");
+            Log("DEVELOPMENT MODE: Allowing connection for testing purposes");
             
             // Create a fake client for testing
             var testSteamId = new SteamId(76561198000000000UL + (ulong)_rand.Next(1000, 9999));
@@ -319,11 +414,11 @@ public class Server : IDisposable
             
             if (clientAdded)
             {
-                Console.WriteLine($"Test client added: {testUsername} (Steam ID: {testSteamId})");
+                Log($"Test client added: {testUsername} (Steam ID: {testSteamId})");
             }
             else
             {
-                Console.WriteLine("Failed to add test client (may be duplicate)");
+                Log("Failed to add test client (may be duplicate)");
             }
             
             return true; // Allow connection for testing
@@ -331,31 +426,31 @@ public class Server : IDisposable
 
         var authTicketUri = "https://api.steampowered.com//ISteamUserAuth/AuthenticateUserTicket/v1/" +
                             $"?key={_webApitoken}&appid={StickFightAppId}&ticket={authTicket}&steamid={_hostSteamId}";
-        Console.WriteLine("auth ticket uri: " + authTicketUri);
+        LogDebug("auth ticket uri: " + authTicketUri);
 
         try
         {
             await Task.Delay(_config.AuthDelayMs).ConfigureAwait(false); // Delay request to reduce false positives of a ticket being invalid
             
             var jsonResponse = await _httpClient.GetStringAsync(authTicketUri).ConfigureAwait(false);
-            Console.WriteLine("Steam auth json response: " + jsonResponse);
+            LogDebug("Steam auth json response: " + jsonResponse);
 
             var authResponse = JsonSerializer.Deserialize<AuthResponse>(jsonResponse, _jsonOptions);
 
             if (authResponse?.Response.Params is null) // Client cannot be authed because json was null or "error" was returned
             {
-                Console.WriteLine("Auth request returned error, denying connection!!");
+                Log("Auth request returned error, denying connection!!");
                 return false;
             }
 
             var authResponseData = authResponse.Response.Params;
 
-            Console.WriteLine("AuthResponse parsed: " + authResponse);
+            LogDebug("AuthResponse parsed: " + authResponse);
 
             if (authResponseData is { Result: not "OK", Publisherbanned: true, Vacbanned: true }) // Client cannot be authed
                 return false;
 
-            Console.WriteLine("Auth has not returned error, attempting to parse steamID");
+            Log("Auth has not returned error, attempting to parse steamID");
 
             var playerSteamID = new SteamId(ulong.Parse(authResponseData.Steamid));
 
@@ -370,33 +465,33 @@ public class Server : IDisposable
 
             if (!clientAdded)
             {
-                Console.WriteLine("Client was not added (may be duplicate connection), but authentication succeeded");
+                Log("Client was not added (may be duplicate connection), but authentication succeeded");
             }
 
             return true;
         }
         catch (HttpRequestException httpEx)
         {
-            Console.WriteLine($"Steam Web API request failed: {httpEx.Message}");
-            Console.WriteLine("This usually means the Steam Web API token is invalid or Steam services are unavailable");
+            Log($"Steam Web API request failed: {httpEx.Message}");
+            Log("This usually means the Steam Web API token is invalid or Steam services are unavailable");
             return false;
         }
         catch (TaskCanceledException timeoutEx)
         {
-            Console.WriteLine($"Steam Web API request timed out: {timeoutEx.Message}");
-            Console.WriteLine("Steam services may be slow or unavailable");
+            Log($"Steam Web API request timed out: {timeoutEx.Message}");
+            Log("Steam services may be slow or unavailable");
             return false;
         }
         catch (JsonException jsonEx)
         {
-            Console.WriteLine($"Failed to parse Steam Web API response: {jsonEx.Message}");
-            Console.WriteLine("The response from Steam may be malformed");
+            Log($"Failed to parse Steam Web API response: {jsonEx.Message}");
+            Log("The response from Steam may be malformed");
             return false;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Unexpected error during authentication: {ex.Message}");
-            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            Log($"Unexpected error during authentication: {ex.Message}");
+            LogDebug($"Stack trace: {ex.StackTrace}");
             return false;
         }
     }
@@ -415,8 +510,8 @@ public class Server : IDisposable
         return profileSummary.Response.Players[0].Personaname; // The client's steam name
     }
 
-    private static void PrintStatusStr(NetBuffer msg)
-        => Console.WriteLine(msg.ReadString());
+    private void PrintStatusStr(NetBuffer msg)
+        => LogDebug(msg.ReadString());
 
     // *************************************************
     // Methods to be executed involving packets sent to and from game
@@ -448,10 +543,7 @@ public class Server : IDisposable
         // Normal case: check if packet is older than last processed
         if (packetTimestamp < _lastProcessedTimestamp - toleranceMs)
         {
-            if (_config.EnableLogging)
-            {
-                Console.WriteLine($"Discarding obsolete packet: timestamp={packetTimestamp}, last={_lastProcessedTimestamp}");
-            }
+            LogDebug($"Discarding obsolete packet: timestamp={packetTimestamp}, last={_lastProcessedTimestamp}");
             return true;
         }
         
@@ -470,10 +562,7 @@ public class Server : IDisposable
 
         _masterServer.SendMessage(msg, user, sendMethod, channel);
 
-        if (_config.EnableLogging)
-        {
-            Console.WriteLine($"Sent packet to {user.RemoteEndPoint}: Type={messageType}, Size={data.Length}, Method={sendMethod}");
-        }
+        LogDebug($"Sent packet to {user.RemoteEndPoint}: Type={messageType}, Size={data.Length}, Method={sendMethod}");
     }
 
     public void SendPacketToAllUsers(byte[] data, SfPacketType messageType,
@@ -487,18 +576,15 @@ public class Server : IDisposable
 
         _masterServer.SendToAll(msg, ignoredUser, sendMethod, channel);
 
-        if (_config.EnableLogging)
-        {
-            var connectionCount = _masterServer.Connections.Count - (ignoredUser != null ? 1 : 0);
-            Console.WriteLine($"Broadcast packet to {connectionCount} clients: Type={messageType}, Size={data.Length}, Method={sendMethod}");
-        }
+        var connectionCount = _masterServer.Connections.Count - (ignoredUser != null ? 1 : 0);
+        LogDebug($"Broadcast packet to {connectionCount} clients: Type={messageType}, Size={data.Length}, Method={sendMethod}");
     }
 
     public void OnPlayerRequestingIndex(NetConnection user)
     {
         var playerInfo = _clientMgr.GetClient(user.RemoteEndPoint.Address);
 
-        Console.WriteLine("This client's index will be: " + playerInfo.PlayerIndex);
+        Log("This client's index will be: " + playerInfo.PlayerIndex);
         var tempMsg = _masterServer.CreateMessage();
         tempMsg.Write((byte)playerInfo.PlayerIndex);
         tempMsg.Write(playerInfo.SteamID.id);
@@ -585,10 +671,7 @@ public class Server : IDisposable
         var previousPosition = client.PositionInfo.Position;
         if (!ValidateMovement(previousPosition, newPosition, newRotation, movementType, client))
         {
-            if (_config.EnableLogging)
-            {
-                Console.WriteLine($"Invalid movement from {client.Username} - rejecting update");
-            }
+            LogDebug($"Invalid movement from {client.Username} - rejecting update");
             return; // Reject the movement update
         }
 
@@ -644,10 +727,7 @@ public class Server : IDisposable
             playerUpdateData.SequenceChannel
         );
 
-        if (_config.EnableLogging && _config.EnableDebugPacketLogging)
-        {
-            Console.WriteLine($"Validated movement for {client.Username}: {positionInfo}");
-        }
+        LogDebug($"Validated movement for {client.Username}: {positionInfo}");
     }
 
     public void OnPlayerForceAdded(NetConnection user, NetIncomingMessage damageData)
@@ -669,7 +749,7 @@ public class Server : IDisposable
 
         if (_config.EnableLogging)
         {
-            Console.WriteLine($"Force applied to player {client.Username}");
+            Log($"Force applied to player {client.Username}");
         }
 
         SendPacketToAllUsers(
@@ -718,7 +798,7 @@ public class Server : IDisposable
 
         if (_config.EnableLogging)
         {
-            Console.WriteLine($"Player {damagedClient.Username} took {calculatedDamage:F1} damage (client sent {clientDamageAmount:F1}), HP: {damagedClient.Hp:F1}, Alive: {damagedClient.IsAlive}");
+            Log($"Player {damagedClient.Username} took {calculatedDamage:F1} damage (client sent {clientDamageAmount:F1}), HP: {damagedClient.Hp:F1}, Alive: {damagedClient.IsAlive}");
         }
 
         // Create corrected damage packet with server-calculated damage
@@ -735,12 +815,12 @@ public class Server : IDisposable
         // Check if player died
         if (!damagedClient.IsAlive)
         {
-            Console.WriteLine($"Player {damagedClient.Username} has been killed!");
+            Log($"Player {damagedClient.Username} has been killed!");
             
             // Update attacker stats if available
             if (attackerClient != damagedClient)
             {
-                Console.WriteLine($"Kill credited to {attackerClient.Username}");
+                Log($"Kill credited to {attackerClient.Username}");
             }
         }
 
@@ -748,7 +828,7 @@ public class Server : IDisposable
         var alivePlayers = _clientMgr.GetNumLivingClients();
         if (alivePlayers <= 1 && _clientMgr.Clients.Count(c => c != null) > 1)
         {
-            Console.WriteLine($"Round ending - {alivePlayers} players remaining");
+            Log($"Round ending - {alivePlayers} players remaining");
             
             // Implement server-sent map packet for round transitions
             if (alivePlayers == 0)
@@ -766,7 +846,7 @@ public class Server : IDisposable
                     NetDeliveryMethod.ReliableOrdered
                 );
                 
-                Console.WriteLine("Sent map change packet - no survivors");
+                Log("Sent map change packet - no survivors");
             }
             else if (attackerClient != null)
             {
@@ -783,7 +863,7 @@ public class Server : IDisposable
                     NetDeliveryMethod.ReliableOrdered
                 );
                 
-                Console.WriteLine($"Sent map change packet - winner: {attackerClient.Username}");
+                Log($"Sent map change packet - winner: {attackerClient.Username}");
             }
             
             // Clean up round state
@@ -798,11 +878,11 @@ public class Server : IDisposable
 
         if (!MapManager.ValidateMapChange(client?.PlayerIndex ?? -1, mapData))
         {
-            Console.WriteLine($"Invalid map change request from {client?.Username ?? "unknown"}");
+            Log($"Invalid map change request from {client?.Username ?? "unknown"}");
             return;
         }
 
-        Console.WriteLine($"Map change requested by {client?.Username ?? "unknown"}");
+        Log($"Map change requested by {client?.Username ?? "unknown"}");
         _mapMgr.ProcessMapChange(mapData);
 
         SendPacketToAllUsers(
@@ -813,7 +893,7 @@ public class Server : IDisposable
             mapMsgData.SequenceChannel
         );
 
-        Console.WriteLine($"Map changed to ID: {_mapMgr.CurrentMapId}, Type: {_mapMgr.CurrentMapType}");
+        Log($"Map changed to ID: {_mapMgr.CurrentMapId}, Type: {_mapMgr.CurrentMapType}");
     }
 
     /// <summary>
@@ -847,7 +927,7 @@ public class Server : IDisposable
             return;
         }
 
-        Console.WriteLine($"{sender.Username}: {chatMsg}");
+        Log($"{sender.Username}: {chatMsg}");
 
         SendPacketToAllUsers(
             chatMsgBytes,
@@ -942,10 +1022,7 @@ public class Server : IDisposable
     {
         if (pingData?.Data == null || pingData.Data.Length < 5)
         {
-            if (_config.EnableLogging)
-            {
-                Console.WriteLine("Received invalid ping packet");
-            }
+            LogDebug("Received invalid ping packet");
             return;
         }
 
@@ -962,7 +1039,7 @@ public class Server : IDisposable
             if (_config.EnableLogging)
             {
                 var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
-                Console.WriteLine($"Responded to ping from {client?.Username ?? "unknown"} (timestamp: {originalTimestamp})");
+                Log($"Responded to ping from {client?.Username ?? "unknown"} (timestamp: {originalTimestamp})");
             }
         }
         catch (Exception ex)
@@ -980,10 +1057,7 @@ public class Server : IDisposable
     {
         if (pongData?.Data == null || pongData.Data.Length < 9) // 5 bytes header + 4 bytes timestamp
         {
-            if (_config.EnableLogging)
-            {
-                Console.WriteLine("Received invalid ping response packet");
-            }
+            LogDebug("Received invalid ping response packet");
             return;
         }
 
@@ -992,10 +1066,7 @@ public class Server : IDisposable
             var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
             if (client == null)
             {
-                if (_config.EnableLogging)
-                {
-                    Console.WriteLine("Received ping response from unknown client");
-                }
+                LogDebug("Received ping response from unknown client");
                 return;
             }
 
@@ -1019,7 +1090,7 @@ public class Server : IDisposable
 
             if (_config.EnableLogging)
             {
-                Console.WriteLine($"Updated ping for {client.Username}: {client.Ping}ms");
+                Log($"Updated ping for {client.Username}: {client.Ping}ms");
             }
         }
         catch (Exception ex)
@@ -1377,7 +1448,7 @@ public class Server : IDisposable
         var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
         if (client != null && Config.EnableLogging)
         {
-            Console.WriteLine($"Client joined: {client.Username} ({client.SteamID})");
+            Log($"Client joined: {client.Username} ({client.SteamID})");
         }
     }
 
@@ -1391,7 +1462,7 @@ public class Server : IDisposable
         var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
         if (client != null && Config.EnableLogging)
         {
-            Console.WriteLine($"Client accepted by server: {client.Username} ({client.SteamID})");
+            Log($"Client accepted by server: {client.Username} ({client.SteamID})");
         }
     }
 
@@ -1408,7 +1479,7 @@ public class Server : IDisposable
             client.Revive(); // Mark player as alive
             if (Config.EnableLogging)
             {
-                Console.WriteLine($"Player spawned: {client.Username} at position data");
+                Log($"Player spawned: {client.Username} at position data");
             }
         }
     }
@@ -1423,14 +1494,14 @@ public class Server : IDisposable
         var client = _clientMgr.GetClient(user.RemoteEndPoint.Address);
         if (client != null && Config.EnableLogging)
         {
-            Console.WriteLine($"Client ready up: {client.Username} ({client.SteamID})");
+            Log($"Client ready up: {client.Username} ({client.SteamID})");
         }
         
         // Check if all clients are ready and potentially start the game
         var readyClients = _clientMgr.AllClients.Count(c => c != null);
         if (Config.EnableLogging)
         {
-            Console.WriteLine($"Ready clients: {readyClients}/{Config.MaxPlayers}");
+            Log($"Ready clients: {readyClients}/{Config.MaxPlayers}");
         }
     }
 
@@ -1451,6 +1522,15 @@ public class Server : IDisposable
     {
         if (disposing)
         {
+            // Close logging resources
+            if (_config.EnableLogging)
+            {
+                LogToFile($"=== SF-Server session ended at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC ===");
+            }
+            
+            _logWriter?.Dispose();
+            _logFileStream?.Dispose();
+            
             _httpClient?.Dispose();
             _masterServer?.Shutdown("Server shutting down");
         }
