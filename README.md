@@ -157,6 +157,12 @@ SF-Server-And-Client/
 2. **BepInEx Package Source**: Some build environments may have issues accessing the BepInEx NuGet source
 3. **Limited Map Support**: Currently only supports the base game maps
 
+## ✅ Fixed Issues
+
+- **Connection Issues**: Fixed client connection hanging - see [CONNECTION_FIX.md](CONNECTION_FIX.md) for details
+- **Authentication Errors**: Improved error handling for Steam Web API authentication
+- **Missing Message Types**: Added support for all required Lidgren network message types
+
 ## 🤝 Contributing
 
 1. Fork the repository
