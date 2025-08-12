@@ -297,48 +297,108 @@ public class Server : IDisposable
         var authTicket = new AuthTicket(msg.Data);
         Console.WriteLine("Attempting to verify user ticket: " + authTicket);
 
+        // Development/testing bypass for dummy tokens
+        if (_webApitoken == "DUMMY_TOKEN" || _webApitoken == "DEBUG_TOKEN" || _webApitoken.StartsWith("DEVELOPMENT"))
+        {
+            Console.WriteLine("WARNING: Using dummy Steam Web API token - authentication bypassed for testing");
+            Console.WriteLine("This would normally fail in production. Please use a real Steam Web API token.");
+            
+            // For testing, we can either:
+            // 1. Always deny (strict security) - uncomment next line
+            // return false;
+            
+            // 2. Allow for testing purposes (current behavior) - create a fake successful auth
+            // This allows testing the connection flow without Steam API
+            Console.WriteLine("DEVELOPMENT MODE: Allowing connection for testing purposes");
+            
+            // Create a fake client for testing
+            var testSteamId = new SteamId(76561198000000000UL + (ulong)_rand.Next(1000, 9999));
+            var testUsername = $"TestUser_{_rand.Next(1000, 9999)}";
+            
+            var clientAdded = _clientMgr.AddNewClient(testSteamId, testUsername, authTicket, msg.GetSenderIP());
+            
+            if (clientAdded)
+            {
+                Console.WriteLine($"Test client added: {testUsername} (Steam ID: {testSteamId})");
+            }
+            else
+            {
+                Console.WriteLine("Failed to add test client (may be duplicate)");
+            }
+            
+            return true; // Allow connection for testing
+        }
+
         var authTicketUri = "https://api.steampowered.com//ISteamUserAuth/AuthenticateUserTicket/v1/" +
                             $"?key={_webApitoken}&appid={StickFightAppId}&ticket={authTicket}&steamid={_hostSteamId}";
         Console.WriteLine("auth ticket uri: " + authTicketUri);
 
-        await Task.Delay(_config.AuthDelayMs).ConfigureAwait(false); // Delay request to reduce false positives of a ticket being invalid
-        var jsonResponse = await _httpClient.GetStringAsync(authTicketUri).ConfigureAwait(false);
-        Console.WriteLine("Steam auth json response: " + jsonResponse);
-
-        var authResponse = JsonSerializer.Deserialize<AuthResponse>(jsonResponse, _jsonOptions);
-
-        if (authResponse?.Response.Params is null) // Client cannot be authed because json was null or "error" was returned
+        try
         {
-            Console.WriteLine("Auth request returned error, denying connection!!");
+            await Task.Delay(_config.AuthDelayMs).ConfigureAwait(false); // Delay request to reduce false positives of a ticket being invalid
+            
+            var jsonResponse = await _httpClient.GetStringAsync(authTicketUri).ConfigureAwait(false);
+            Console.WriteLine("Steam auth json response: " + jsonResponse);
+
+            var authResponse = JsonSerializer.Deserialize<AuthResponse>(jsonResponse, _jsonOptions);
+
+            if (authResponse?.Response.Params is null) // Client cannot be authed because json was null or "error" was returned
+            {
+                Console.WriteLine("Auth request returned error, denying connection!!");
+                return false;
+            }
+
+            var authResponseData = authResponse.Response.Params;
+
+            Console.WriteLine("AuthResponse parsed: " + authResponse);
+
+            if (authResponseData is { Result: not "OK", Publisherbanned: true, Vacbanned: true }) // Client cannot be authed
+                return false;
+
+            Console.WriteLine("Auth has not returned error, attempting to parse steamID");
+
+            var playerSteamID = new SteamId(ulong.Parse(authResponseData.Steamid));
+
+            if (playerSteamID.IsBadId()) return false; // Double check validity of steamID
+
+            var playerUsername = await FetchSteamUserName(playerSteamID).ConfigureAwait(false);
+
+            var clientAdded = _clientMgr.AddNewClient(playerSteamID,
+                playerUsername,
+                authTicket,
+                msg.GetSenderIP());
+
+            if (!clientAdded)
+            {
+                Console.WriteLine("Client was not added (may be duplicate connection), but authentication succeeded");
+            }
+
+            return true;
+        }
+        catch (HttpRequestException httpEx)
+        {
+            Console.WriteLine($"Steam Web API request failed: {httpEx.Message}");
+            Console.WriteLine("This usually means the Steam Web API token is invalid or Steam services are unavailable");
             return false;
         }
-
-        var authResponseData = authResponse.Response.Params;
-
-        Console.WriteLine("AuthResponse parsed: " + authResponse);
-
-        if (authResponseData is { Result: not "OK", Publisherbanned: true, Vacbanned: true }) // Client cannot be authed
-            return false;
-
-        Console.WriteLine("Auth has not returned error, attempting to parse steamID");
-
-        var playerSteamID = new SteamId(ulong.Parse(authResponseData.Steamid));
-
-        if (playerSteamID.IsBadId()) return false; // Double check validity of steamID
-
-        var playerUsername = await FetchSteamUserName(playerSteamID).ConfigureAwait(false);
-
-        var clientAdded = _clientMgr.AddNewClient(playerSteamID,
-            playerUsername,
-            authTicket,
-            msg.GetSenderIP());
-
-        if (!clientAdded)
+        catch (TaskCanceledException timeoutEx)
         {
-            Console.WriteLine("Client was not added (may be duplicate connection), but authentication succeeded");
+            Console.WriteLine($"Steam Web API request timed out: {timeoutEx.Message}");
+            Console.WriteLine("Steam services may be slow or unavailable");
+            return false;
         }
-
-        return true;
+        catch (JsonException jsonEx)
+        {
+            Console.WriteLine($"Failed to parse Steam Web API response: {jsonEx.Message}");
+            Console.WriteLine("The response from Steam may be malformed");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Unexpected error during authentication: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            return false;
+        }
     }
 
     private async Task<string> FetchSteamUserName(SteamId clientSteamId)
