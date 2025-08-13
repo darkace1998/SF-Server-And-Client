@@ -38,6 +38,7 @@ public class Server : IDisposable
     private const string StickFightAppId = "674940";
 
     private int NumberOfClients => _masterServer.Connections.Count;
+    private int AuthenticatedPlayers => _clientMgr.Clients.Count(c => c != null);
 
     public Server(ServerConfig config)
     {
@@ -329,7 +330,7 @@ public class Server : IDisposable
             switch (newStatus)
             {
                 case NetConnectionStatus.RespondedConnect:
-                    Log("Number of clients connected is now: " + NumberOfClients);
+                    Log("Number of clients connected is now: " + AuthenticatedPlayers);
                     return;
                 case NetConnectionStatus.Disconnected:
                     OnPlayerExit(msg);
@@ -678,7 +679,7 @@ public class Server : IDisposable
         tempMsg.Write(spawnPosData.ReadBytes(25)); // Contains player index, spawn pos. vector, and rotation vector
 
         // Use MapManager to determine spawn position modification
-        var shouldModifySpawn = _mapMgr.CurrentMapType != MapType.Lobby && NumberOfClients > 1;
+        var shouldModifySpawn = _mapMgr.CurrentMapType != MapType.Lobby && AuthenticatedPlayers > 1;
         tempMsg.Write(shouldModifySpawn); // Changes spawn pos if not on lobby map and more than 1 player
 
         SendPacketToAllUsers(tempMsg.ReadBytes(26), SfPacketType.ClientSpawned);
