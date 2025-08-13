@@ -61,6 +61,17 @@ if (!serverStarted)
     Environment.Exit(1);
 }
 
+// Validate packet types for client compatibility
+try
+{
+    PacketTypeValidator.ValidatePacketTypes();
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Packet type validation failed: {ex.Message}");
+    Console.WriteLine("This may cause client compatibility issues!");
+}
+
 // Register shutdown action
 ShutdownHandler.RegisterShutdownAction(() =>
 {
