@@ -26,6 +26,16 @@ public class ServerConfig
     /// Whether single players should automatically load into a map instead of waiting in lobby
     /// </summary>
     public bool AutoStartSinglePlayer { get; set; } = true;
+    
+    /// <summary>
+    /// Whether to automatically start the game when minimum players join (2+)
+    /// </summary>
+    public bool AutoStartMultiplayer { get; set; } = true;
+    
+    /// <summary>
+    /// Minimum number of players required to auto-start a multiplayer game
+    /// </summary>
+    public int MinPlayersForAutoStart { get; set; } = 2;
 
     /// <summary>
     /// Load configuration from a JSON file
@@ -192,6 +202,32 @@ public class ServerConfig
                     }
                     break;
 
+                case "--auto_start_multiplayer":
+                    didParse = bool.TryParse(args[i + 1], out var autoStartMulti);
+                    if (didParse)
+                    {
+                        AutoStartMultiplayer = autoStartMulti;
+                        Console.WriteLine($"Auto start multiplayer set to: {AutoStartMultiplayer}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Invalid auto start multiplayer value '{args[i + 1]}', using default: {AutoStartMultiplayer}");
+                    }
+                    break;
+
+                case "--min_players_for_auto_start":
+                    didParse = int.TryParse(args[i + 1], out var minPlayers);
+                    if (didParse && minPlayers >= 2 && minPlayers <= MaxPlayers)
+                    {
+                        MinPlayersForAutoStart = minPlayers;
+                        Console.WriteLine($"Minimum players for auto start set to: {MinPlayersForAutoStart}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Invalid minimum players value '{args[i + 1]}', using default: {MinPlayersForAutoStart}");
+                    }
+                    break;
+
                 case "--config":
                     // Handle config file loading
                     var configFromFile = LoadFromFile(args[i + 1]);
@@ -203,6 +239,8 @@ public class ServerConfig
                     EnableConsoleOutput = configFromFile.EnableConsoleOutput;
                     GameOptions = configFromFile.GameOptions;
                     AutoStartSinglePlayer = configFromFile.AutoStartSinglePlayer;
+                    AutoStartMultiplayer = configFromFile.AutoStartMultiplayer;
+                    MinPlayersForAutoStart = configFromFile.MinPlayersForAutoStart;
                     // Don't override credentials from config file for security
                     Console.WriteLine($"Configuration loaded from: {args[i + 1]}");
                     break;

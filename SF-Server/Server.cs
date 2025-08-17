@@ -631,45 +631,60 @@ public class Server : IDisposable
 
         SendPacketToUser(user, tempMsg.Data, SfPacketType.ClientInit);
         
-        // Check if we should auto-start single player
-        CheckAndHandleSinglePlayerAutoStart();
+        // Check if we should auto-start single player or multiplayer game
+        CheckAndHandleAutoStart();
     }
 
     /// <summary>
-    /// Checks if there's only one player and auto-starts them into a map if configured
+    /// Checks if we should auto-start either single player or multiplayer game based on connected players
     /// </summary>
-    private void CheckAndHandleSinglePlayerAutoStart()
+    private void CheckAndHandleAutoStart()
     {
-        // Only proceed if auto-start is enabled and we're currently in lobby
-        if (!_config.AutoStartSinglePlayer || _mapMgr.CurrentMapType != MapType.Lobby)
+        // Only proceed if we're currently in lobby
+        if (_mapMgr.CurrentMapType != MapType.Lobby)
             return;
 
         // Count actual connected clients
         var connectedClients = _clientMgr.Clients.Count(c => c != null);
         
-        // If we have exactly one player, transition to a game map
-        if (connectedClients == 1)
+        // Check for single player auto-start
+        if (connectedClients == 1 && _config.AutoStartSinglePlayer)
         {
-            var newMap = _mapMgr.GetNextMap();
-            _mapMgr.ProcessMapChange(newMap.GetData());
-            
-            // Send map change to all clients (just the one player in this case)
-            var mapChangeMsg = _masterServer.CreateMessage();
-            mapChangeMsg.Write(byte.MaxValue); // No specific winner 
-            mapChangeMsg.Write((byte)newMap.MapType);
-            mapChangeMsg.Write(newMap.MapId);
-            
-            SendPacketToAllUsers(
-                mapChangeMsg.Data,
-                SfPacketType.MapChange,
-                null,
-                NetDeliveryMethod.ReliableOrdered
-            );
-            
-            if (_config.EnableLogging)
-            {
-                Console.WriteLine($"Auto-started single player into map: {newMap.MapId} (Type: {newMap.MapType})");
-            }
+            StartGameForPlayers("Single player auto-start");
+            return;
+        }
+        
+        // Check for multiplayer auto-start  
+        if (connectedClients >= _config.MinPlayersForAutoStart && _config.AutoStartMultiplayer)
+        {
+            StartGameForPlayers($"Multiplayer auto-start with {connectedClients} players");
+        }
+    }
+    
+    /// <summary>
+    /// Starts the game by transitioning to a game map for the current players
+    /// </summary>
+    private void StartGameForPlayers(string reason)
+    {
+        var newMap = _mapMgr.GetNextMap();
+        _mapMgr.ProcessMapChange(newMap.GetData());
+        
+        // Send map change to all clients
+        var mapChangeMsg = _masterServer.CreateMessage();
+        mapChangeMsg.Write(byte.MaxValue); // No specific winner 
+        mapChangeMsg.Write((byte)newMap.MapType);
+        mapChangeMsg.Write(newMap.MapId);
+        
+        SendPacketToAllUsers(
+            mapChangeMsg.Data,
+            SfPacketType.MapChange,
+            null,
+            NetDeliveryMethod.ReliableOrdered
+        );
+        
+        if (_config.EnableLogging)
+        {
+            Console.WriteLine($"{reason}: Transitioning to map {newMap.MapId} (Type: {newMap.MapType})");
         }
     }
 
