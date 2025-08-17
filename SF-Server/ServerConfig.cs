@@ -217,7 +217,7 @@ public class ServerConfig
 
                 case "--min_players_for_auto_start":
                     didParse = int.TryParse(args[i + 1], out var minPlayers);
-                    if (didParse && minPlayers >= 2 && minPlayers <= MaxPlayers)
+                    if (didParse && minPlayers >= 2 && minPlayers <= 10)
                     {
                         MinPlayersForAutoStart = minPlayers;
                         Console.WriteLine($"Minimum players for auto start set to: {MinPlayersForAutoStart}");
