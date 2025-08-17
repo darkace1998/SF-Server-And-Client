@@ -8,5 +8,7 @@
   "LogPath": "debug_log.txt",
   "AuthDelayMs": 1000,
   "EnableConsoleOutput": true,
-  "AutoStartSinglePlayer": true
+  "AutoStartSinglePlayer": true,
+  "AutoStartMultiplayer": true,
+  "MinPlayersForAutoStart": 2
 }

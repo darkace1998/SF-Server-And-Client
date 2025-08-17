@@ -3,8 +3,11 @@
 ## Issue Fixed
 Fixed the issue where when 2+ people join the server, only the first player can see their own character spawning. Other players were not visible to each other.
 
+**NEW: Also fixed the missing multiplayer auto-start logic** - the server now automatically starts games when 2+ players join (configurable).
+
 ## Root Cause
-The client-side packet routing in `SF_Lidgren/MatchmakingHandlerSocketsPatches.cs` was incorrectly routing `ClientJoined` and `ClientSpawned` packets to the original Steam P2P handler instead of processing them for dedicated server mode.
+1. **Client-side packet routing**: The client-side packet routing in `SF_Lidgren/MatchmakingHandlerSocketsPatches.cs` was incorrectly routing `ClientJoined` and `ClientSpawned` packets to the original Steam P2P handler instead of processing them for dedicated server mode.
+2. **Missing server-side multiplayer logic**: The server only had auto-start logic for single players, causing 2+ players to remain in lobby indefinitely with no game progression.
 
 ## Changes Made
 1. **Fixed packet routing logic**: Server packets that affect multiplayer state are now properly identified and processed
@@ -12,6 +15,10 @@ The client-side packet routing in `SF_Lidgren/MatchmakingHandlerSocketsPatches.c
    - `ClientJoined` packets (type 2) - triggers when other players join
    - `ClientSpawned` packets (type 8) - triggers when other players spawn
    - `MapChange` packets (type 18) - handles map transitions
+3. **Added server-side multiplayer auto-start logic**:
+   - New configuration options: `AutoStartMultiplayer`, `MinPlayersForAutoStart`
+   - Server now automatically starts games when minimum players join
+   - Configurable via command line or config file
 
 ## How to Test the Fix
 
@@ -30,6 +37,18 @@ The client-side packet routing in `SF_Lidgren/MatchmakingHandlerSocketsPatches.c
    Or for production testing with real Steam API:
    ```bash
    dotnet run -- --steam_web_api_token YOUR_REAL_TOKEN --host_steamid YOUR_STEAM_ID --port 1337 --max_players 4
+   ```
+
+   **New server options for multiplayer auto-start:**
+   ```bash
+   # Enable multiplayer auto-start (default: true)
+   dotnet run -- --steam_web_api_token YOUR_TOKEN --host_steamid YOUR_STEAM_ID --auto_start_multiplayer true
+   
+   # Set minimum players for auto-start (default: 2)
+   dotnet run -- --steam_web_api_token YOUR_TOKEN --host_steamid YOUR_STEAM_ID --min_players_for_auto_start 3
+   
+   # Disable auto-start for testing lobby behavior
+   dotnet run -- --steam_web_api_token YOUR_TOKEN --host_steamid YOUR_STEAM_ID --auto_start_multiplayer false
    ```
 
 ### Client Setup
@@ -56,17 +75,22 @@ The client-side packet routing in `SF_Lidgren/MatchmakingHandlerSocketsPatches.c
    - Player 2 should connect and both players should be visible
 
 ### Expected Behavior (After Fix)
-- ✅ **Player 1 joins**: Connects and spawns normally
+- ✅ **Player 1 joins**: Connects and spawns normally (auto-starts if single player mode enabled)
 - ✅ **Player 2 joins**: 
   - Player 1 should see a "Player joined" message in console/logs
+  - **NEW**: Server automatically starts a multiplayer game (if auto-start enabled)
+  - **NEW**: Both players are transitioned from lobby to game map
   - Player 1 should see Player 2's character appear when Player 2 spawns
 - ✅ **Both players visible**: Both players can see each other's characters and movements
 - ✅ **Map changes**: Both players transition together when maps change
+- ✅ **Game progression**: Players can now actually play together instead of being stuck in lobby
 
 ### Previous Broken Behavior
 - ❌ Player 1 would connect and spawn
 - ❌ Player 2 would connect but Player 1 couldn't see Player 2
 - ❌ Each player could only see themselves
+- ❌ **Players would remain in lobby indefinitely** - no game would start
+- ❌ **No level progression for multiplayer** - stuck in lobby with no gameplay
 
 ### Debug Information
 The fix adds extensive debug logging. Check the game's console output or BepInEx logs for messages like:
@@ -74,6 +98,12 @@ The fix adds extensive debug logging. Check the game's console output or BepInEx
 - `"Processing ClientSpawned packet from server"`
 - `"Player X joined with Steam ID: Y"`
 - `"Triggering spawn for player index: X"`
+
+**New server-side debug messages:**
+- `"Multiplayer auto-start with X players: Transitioning to map Y"`
+- `"Single player auto-start: Transitioning to map Y"` 
+- `"Auto start multiplayer set to: True/False"`
+- `"Minimum players for auto start set to: X"`
 
 ### Troubleshooting
 If players still can't see each other:
